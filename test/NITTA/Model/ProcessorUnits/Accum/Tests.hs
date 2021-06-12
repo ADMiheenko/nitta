@@ -168,6 +168,13 @@ tests =
             decide $ consume "b"
             decide $ provide ["c"]
             assertSynthesisDone
+        , unitTestCase "accum locks test" accumDef $ do
+            assign $ add "a" "b" ["c"]
+            setValue "a" 2
+            setValue "b" 12
+
+            assertEndpoint 0 maxBound $ consume "a"
+            assertLocks [Lock{locked = "c", lockBy = "a"}, Lock{locked = "c", lockBy = "b"}]
         ]
     where
         accumDef = def :: Accum T.Text Int Int
