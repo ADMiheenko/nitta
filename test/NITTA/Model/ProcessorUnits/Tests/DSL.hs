@@ -199,11 +199,11 @@ luaSource src = do
     st@NittaTestState{} <- get
     put st{tFuncts = [], sourceCode = src}
 
-funcSource f = funcSources [f]
+funcSources fs = mapM_ funcSource fs
 
-funcSources fs = do
-    st@NittaTestState{} <- get
-    put st{tFuncts = fs, sourceCode = Nothing}
+funcSource f = do
+    st@NittaTestState{tFuncts} <- get
+    put st{tFuncts = f : tFuncts, sourceCode = Nothing}
 
 assertSynthesisFinished = do
     NittaTestState{tTestName, microArch, tFuncts, sourceCode} <- get
