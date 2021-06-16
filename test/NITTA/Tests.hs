@@ -35,6 +35,7 @@ import NITTA.Intermediate.Types
 import NITTA.Model.Networks.Types
 import NITTA.Model.Problems
 import NITTA.Model.ProcessorUnits
+import NITTA.Model.ProcessorUnits.Tests.Providers
 import NITTA.Model.Tests.Internals
 import NITTA.Model.Tests.Providers
 import NITTA.Synthesis
@@ -45,15 +46,17 @@ import Test.Tasty.TH
 -- FIXME: avoid NITTA.Model.Tests.Internals usage
 
 test_fibonacci =
-    [ algTestCase
-        "simple"
-        march
-        [ F.loop 0 "b2" ["a1"]
-        , F.loop 1 "c" ["b1", "b2"]
-        , F.add "a1" "b1" ["c"]
-        ]
-    , algTestCase "io_drop_data" (marchSPIDropData True pInt) algWithSend
-    , algTestCase "io_no_drop_data" (marchSPI True pInt) algWithSend
+    [ nittaTestCase "simple" march $ do
+        funcSource $ F.loop 0 "b2" ["a1"]
+        funcSource (F.loop 1 "c" ["b1", "b2"])
+        funcSource (F.add "a1" "b1" ["c"])
+        assertSynthesisFinished
+    , nittaTestCase "io_drop_data" (marchSPIDropData True pInt) $ do
+        funcSources algWithSend
+        assertSynthesisFinished
+    , nittaTestCase "io_no_drop_data" (marchSPI True pInt) $ do
+        funcSources algWithSend
+        assertSynthesisFinished
     ]
     where
         algWithSend =

@@ -127,26 +127,116 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     traceFunctions,
     traceEndpoints,
     traceProcess,
+
+    -- *Bus
+    nittaTestCase,
+    funcSource,
+    funcSources,
+    assertSynthesisFinished,
 ) where
 
 import Control.Monad.Identity
 import Control.Monad.State.Lazy
 import Data.CallStack
+import Data.Default
+import Data.Either
 import Data.List (find)
+import Data.Maybe
+import Data.Proxy
 import qualified Data.Set as S
 import Data.String.ToString
-import qualified Data.String.Utils as S
+import Data.Text (Text)
+import qualified Data.Text as T
+import NITTA.Intermediate.DataFlow
 import NITTA.Intermediate.Types
+import NITTA.Model.Networks.Bus
 import NITTA.Model.Networks.Types (PUClasses)
 import NITTA.Model.Problems
 import NITTA.Model.ProcessorUnits
 import NITTA.Model.ProcessorUnits.Tests.Utils
+import NITTA.Model.Tests.Internals
 import NITTA.Project
+import NITTA.Synthesis
 import NITTA.Utils
 import Numeric.Interval.NonEmpty hiding (elem)
 import Prettyprinter (pretty)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
+
+nittaTestCase ::
+    (HasCallStack, UnitTag tag) =>
+    String ->
+    BusNetwork tag v x t ->
+    DSLNittaStatement tag v x t () ->
+    TestTree
+nittaTestCase name net alg = testCase name $ do
+    void $ evalNittaTestState name net alg
+
+-- TargetSynthesis
+type DSLNittaStatement tag v x t r = (HasCallStack) => StateT (NittaTestState tag v x t r) IO r
+
+-- 1. Implement in separate data type
+-- 2. Combine in UnitTestState and use different entry points as unitTestState, luaTestState, nittaTestState
+data NittaTestState tag v x t p = NittaTestState
+    { tTestName :: String
+    , -- | TODO probably will be able to modify
+      microArch :: BusNetwork tag v x t
+    , -- | TODO
+      tFuncts :: [F v x]
+    , -- | Bus type TODO: probably here another type t!
+      busType :: Maybe (Proxy p)
+    , -- | Algorithm source code
+      sourceCode :: Maybe Text
+    }
+
+evalNittaTestState name net alg = evalStateT alg $ NittaTestState name net [] Nothing Nothing
+
+setBusType busType = do
+    st@NittaTestState{} <- get
+    put st{busType = busType}
+
+luaSource src = do
+    st@NittaTestState{} <- get
+    put st{tFuncts = [], sourceCode = src}
+
+funcSource f = funcSources [f]
+
+funcSources fs = do
+    st@NittaTestState{} <- get
+    put st{tFuncts = fs, sourceCode = Nothing}
+
+assertSynthesisFinished = do
+    NittaTestState{tTestName, microArch, tFuncts, sourceCode} <- get
+    when (null tFuncts && isNothing sourceCode) $
+        lift $ assertFailure "TODO: "
+    status <- lift $ runSynthesis tTestName microArch tFuncts sourceCode
+    when (isLeft status) $
+        lift $ assertFailure $ fromLeft "target synthesis failed" status
+
+runSynthesis n microArch funcs src = do
+    reportE <-
+        runTargetSynthesisWithUniqName
+            (def :: TargetSynthesis _ _ _ Int)
+                { tName = n
+                , tMicroArch = microArch
+                , -- TODO check when this field is [] or src is Nothing
+                  tDFG = fsToDataFlowGraph funcs
+                , tSourceCode = src
+                }
+    return $ case reportE of
+        Left err -> Left $ "synthesis process fail " <> err
+        Right TestbenchReport{tbStatus = True} -> Right ()
+        Right report@TestbenchReport{tbCompilerDump}
+            | T.length tbCompilerDump > 2 ->
+                Left $ "icarus synthesis error:\n" <> show report
+        Right report@TestbenchReport{} ->
+            Left $ "icarus simulation error:\n" <> show report
+
+--transferVariables ["a","b"]
+--traceDataflows
+-- modifyNetwork :: Microarchitecture 131 ???
+
+-----
 
 unitTestCase ::
     (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) =>
