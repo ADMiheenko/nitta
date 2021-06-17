@@ -24,19 +24,16 @@ module NITTA.Tests (
     tests,
 ) where
 
-import Control.Monad (void)
 import Data.Default
 import Data.Map.Strict (fromList)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import NITTA.Intermediate.DataFlow
 import qualified NITTA.Intermediate.Functions as F
 import NITTA.Intermediate.Types
 import NITTA.Model.Networks.Types
 import NITTA.Model.Problems
 import NITTA.Model.ProcessorUnits
 import NITTA.Model.ProcessorUnits.Tests.Providers
-import NITTA.Model.Tests.Internals
 import NITTA.Model.Tests.Providers
 import NITTA.Synthesis
 import Test.Tasty (TestTree, testGroup)
@@ -53,16 +50,15 @@ test_fibonacci =
         assignNaive (F.add "a1" "b1" ["c"]) []
         assertSynthesisFinished
     , nittaTestCase "io_drop_data" ts $ do
-        modifyNetwork (marchSPIDropData True pInt)
+        modifyNetwork $ marchSPIDropData True pInt
         assignsNaive algWithSend []
         assertSynthesisFinished
     , nittaTestCase "io_no_drop_data" ts $ do
-        modifyNetwork (marchSPI True pInt)
+        modifyNetwork $ marchSPI True pInt
         assignsNaive algWithSend []
         assertSynthesisFinished
     ]
     where
-        ts = def :: TargetSynthesis _ _ _ Int
         algWithSend =
             [ F.loop 0 "b2" ["a1"]
             , F.loop 1 "c1" ["b1", "b2"]
@@ -71,28 +67,24 @@ test_fibonacci =
             ]
 
 test_add_and_io =
-    [ testCase "receive 4 variables" $
-        void $
-            runTargetSynthesisWithUniqName
-                (def :: TargetSynthesis _ _ _ Int)
-                    { tName = "receive_4_variables"
-                    , tMicroArch = marchSPI True pInt
-                    , tReceivedValues = [("a", [10 .. 15]), ("b", [20 .. 25]), ("e", [0 .. 25]), ("f", [20 .. 30])]
-                    , tDFG =
-                        fsToDataFlowGraph
-                            [ F.receive ["a"]
-                            , F.receive ["b"]
-                            , F.receive ["e"]
-                            , F.receive ["f"]
-                            , F.accFromStr "+a +b = c = d; +e - f = g = h"
-                            , F.send "d"
-                            , F.send "c"
-                            , F.send "g"
-                            , F.send "h"
-                            ]
-                    }
+    [ nittaTestCase "receive 4 variables" ts $ do
+        modifyNetwork $ marchSPI True pInt
+        assignNaive (F.receive ["a"]) [("a", [10 .. 15])]
+        assignNaive (F.receive ["b"]) [("b", [20 .. 25])]
+        assignNaive (F.receive ["e"]) [("e", [0 .. 25])]
+        assignNaive (F.receive ["f"]) [("f", [20 .. 30])]
+        assignsNaive
+            [ F.accFromStr "+a +b = c = d; +e - f = g = h"
+            , F.send "d"
+            , F.send "c"
+            , F.send "g"
+            , F.send "h"
+            ]
+            []
+        assertSynthesisFinished
     ]
 
+ts = def :: TargetSynthesis _ _ _ _
 f1 = F.add "a" "b" ["c", "d"] :: F T.Text Int
 
 patchP :: (Patch a (T.Text, T.Text)) => (T.Text, T.Text) -> a -> a

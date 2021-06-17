@@ -144,6 +144,7 @@ import Data.Maybe
 import Data.Proxy
 import qualified Data.Set as S
 import Data.String.ToString
+import qualified Data.String.Utils as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import NITTA.Intermediate.DataFlow
@@ -171,12 +172,19 @@ luaSource src = do
     -- TODO: keep functs?
     put st{functs = [], unit = ts{tSourceCode = src}}
 
+-- TODO: refactor
 assertSynthesisFinished = do
-    -- TODO: should be tDFG be filled instead functs??
-    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
+    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}, cntxCycle} <- get
     when (null functs && isNothing tSourceCode) $
-        lift $ assertFailure "TODO: "
-    status <- lift $ runSynthesis ta{tName = toString testName, tDFG = fsToDataFlowGraph functs}
+        lift $ assertFailure "Can't run target synthesis, tou haven't provided any functions or source code"
+    status <-
+        lift $
+            runSynthesis
+                ta
+                    { tName = S.replace " " "_" $ toString testName
+                    , tDFG = fsToDataFlowGraph functs
+                    , tReceivedValues = cntxCycle
+                    }
     when (isLeft status) $
         lift $ assertFailure $ fromLeft "target synthesis failed" status
 
@@ -202,7 +210,7 @@ nittaTestCase ::
     (HasCallStack) =>
     String ->
     pu ->
-    DSLStatement2 pu v x () ->
+    DSLStatement2 pu v x cx () ->
     TestTree
 nittaTestCase name net alg = testCase name $ do
     -- TODO: rename evalNittaTestState
@@ -221,7 +229,7 @@ unitTestCase name pu alg = testCase name $ do
     void $ evalUnitTestState name pu alg
 
 -- | State of the processor unit used in test
-data UnitTestState pu v x = UnitTestState
+data UnitTestState pu v x cx = UnitTestState
     { testName :: String
     , -- | Processor unit model.
       unit :: pu
@@ -231,15 +239,15 @@ data UnitTestState pu v x = UnitTestState
       -- 2. assignNaive - will be binded during naive synthesis.
       functs :: [F v x]
     , -- | Initial values for coSimulation
-      cntxCycle :: [(v, x)]
+      cntxCycle :: [(v, cx)]
     , -- | TODO: add suitable type
       busType :: Maybe (Proxy x)
     }
     deriving (Show)
 
-type DSLStatement2 pu v x r = (HasCallStack) => StateT (UnitTestState pu v x) IO r
+type DSLStatement2 pu v x cx r = HasCallStack => StateT (UnitTestState pu v x cx) IO r
 
-type DSLStatement pu v x t r = (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) => StateT (UnitTestState pu v x) IO r
+type DSLStatement pu v x t r = (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) => StateT (UnitTestState pu v x x) IO r
 
 evalUnitTestState name st alg = evalStateT alg (UnitTestState name st [] [] Nothing)
 
@@ -264,6 +272,7 @@ for naive coSimulation
 -}
 assignNaive f cntxs = do
     st@UnitTestState{functs, cntxCycle} <- get
+    -- TODO: add if value is present
     put st{functs = f : functs, cntxCycle = cntxs <> cntxCycle}
 
 -- | set initital values for coSimulation input variables
