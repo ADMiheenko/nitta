@@ -130,8 +130,6 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
 
     -- *Bus
     nittaTestCase,
-    funcSource,
-    funcSources,
     assertSynthesisFinished,
 ) where
 
@@ -163,66 +161,26 @@ import Prettyprinter (pretty)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 
-nittaTestCase ::
-    (HasCallStack, UnitTag tag) =>
-    String ->
-    BusNetwork tag v x t ->
-    DSLNittaStatement tag v x t () ->
-    TestTree
-nittaTestCase name net alg = testCase name $ do
-    void $ evalNittaTestState name net alg
-
--- TargetSynthesis
-type DSLNittaStatement tag v x t r = (HasCallStack) => StateT (NittaTestState tag v x t r) IO r
-
--- 1. Implement in separate data type
--- 2. Combine in UnitTestState and use different entry points as unitTestState, luaTestState, nittaTestState
-data NittaTestState tag v x t p = NittaTestState
-    { tTestName :: String
-    , -- | TODO probably will be able to modify
-      microArch :: BusNetwork tag v x t
-    , -- | TODO
-      tFuncts :: [F v x]
-    , -- | Bus type TODO: probably here another type t!
-      busType :: Maybe (Proxy p)
-    , -- | Algorithm source code
-      sourceCode :: Maybe Text
-    }
-
-evalNittaTestState name net alg = evalStateT alg $ NittaTestState name net [] Nothing Nothing
-
 setBusType busType = do
-    st@NittaTestState{} <- get
+    st@UnitTestState{} <- get
     put st{busType = busType}
 
 luaSource src = do
-    st@NittaTestState{} <- get
-    put st{tFuncts = [], sourceCode = src}
-
-funcSources fs = mapM_ funcSource fs
-
-funcSource f = do
-    st@NittaTestState{tFuncts} <- get
-    put st{tFuncts = f : tFuncts, sourceCode = Nothing}
+    st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
+    -- TODO: keep functs?
+    put st{functs = [], unit = ts{tSourceCode = src}}
 
 assertSynthesisFinished = do
-    NittaTestState{tTestName, microArch, tFuncts, sourceCode} <- get
-    when (null tFuncts && isNothing sourceCode) $
+    -- TODO: should be tDFG be filled instead functs??
+    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
+    when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "TODO: "
-    status <- lift $ runSynthesis tTestName microArch tFuncts sourceCode
+    status <- lift $ runSynthesis ta{tName = toString testName, tDFG = fsToDataFlowGraph functs}
     when (isLeft status) $
         lift $ assertFailure $ fromLeft "target synthesis failed" status
 
-runSynthesis n microArch funcs src = do
-    reportE <-
-        runTargetSynthesisWithUniqName
-            (def :: TargetSynthesis _ _ _ Int)
-                { tName = n
-                , tMicroArch = microArch
-                , -- TODO check when this field is [] or src is Nothing
-                  tDFG = fsToDataFlowGraph funcs
-                , tSourceCode = src
-                }
+runSynthesis target = do
+    reportE <- runTargetSynthesisWithUniqName target
     return $ case reportE of
         Left err -> Left $ "synthesis process fail " <> err
         Right TestbenchReport{tbStatus = True} -> Right ()
@@ -235,6 +193,17 @@ runSynthesis n microArch funcs src = do
 --transferVariables ["a","b"]
 --traceDataflows
 -- modifyNetwork :: Microarchitecture 131 ???
+
+nittaTestCase ::
+    (HasCallStack, UnitTag tag) =>
+    String ->
+    BusNetwork tag v x t ->
+    DSLStatement2 (TargetSynthesis tag v x t) v x () ->
+    TestTree
+nittaTestCase name net alg = testCase name $ do
+    -- TODO: rename evalNittaTestState
+    --void $ evalUnitTestState name (TargetSynthesis{tMicroArch = net}) alg
+    void $ evalUnitTestState name (TargetSynthesis{tSourceCode = Nothing, tMicroArch = net}) alg
 
 -----
 
@@ -259,12 +228,16 @@ data UnitTestState pu v x = UnitTestState
       functs :: [F v x]
     , -- | Initial values for coSimulation
       cntxCycle :: [(v, x)]
+    , -- | TODO: add suitable type
+      busType :: Maybe (Proxy x)
     }
     deriving (Show)
 
+type DSLStatement2 pu v x r = (HasCallStack) => StateT (UnitTestState pu v x) IO r
+
 type DSLStatement pu v x t r = (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) => StateT (UnitTestState pu v x) IO r
 
-evalUnitTestState name st alg = evalStateT alg (UnitTestState name st [] [])
+evalUnitTestState name st alg = evalStateT alg (UnitTestState name st [] [] Nothing)
 
 -- | Binds several provided functions to PU
 assigns alg = mapM_ assign alg

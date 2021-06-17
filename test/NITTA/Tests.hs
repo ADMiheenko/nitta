@@ -47,15 +47,15 @@ import Test.Tasty.TH
 
 test_fibonacci =
     [ nittaTestCase "simple" march $ do
-        funcSource $ F.loop 0 "b2" ["a1"]
-        funcSource (F.loop 1 "c" ["b1", "b2"])
-        funcSource (F.add "a1" "b1" ["c"])
+        assignNaive (F.loop (0 :: Int) (T.pack "b2") (map T.pack ["a1"])) []
+        -- assignNaive (F.loop 1 "c" ["b1", "b2"]) []
+        --       assignNaive (F.add "a1" "b1" ["c"]) []
         assertSynthesisFinished
     , nittaTestCase "io_drop_data" (marchSPIDropData True pInt) $ do
-        funcSources algWithSend
+        assignsNaive algWithSend []
         assertSynthesisFinished
     , nittaTestCase "io_no_drop_data" (marchSPI True pInt) $ do
-        funcSources algWithSend
+        assignsNaive algWithSend []
         assertSynthesisFinished
     ]
     where
