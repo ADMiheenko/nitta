@@ -130,6 +130,7 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
 
     -- *Bus
     nittaTestCase,
+    modifyNetwork,
     assertSynthesisFinished,
 ) where
 
@@ -190,20 +191,23 @@ runSynthesis target = do
         Right report@TestbenchReport{} ->
             Left $ "icarus simulation error:\n" <> show report
 
+modifyNetwork network = do
+    st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
+    put st{unit = ts{tMicroArch = network}}
+
 --transferVariables ["a","b"]
 --traceDataflows
--- modifyNetwork :: Microarchitecture 131 ???
 
 nittaTestCase ::
-    (HasCallStack, UnitTag tag) =>
+    (HasCallStack) =>
     String ->
-    BusNetwork tag v x t ->
-    DSLStatement2 (TargetSynthesis tag v x t) v x () ->
+    pu ->
+    DSLStatement2 pu v x () ->
     TestTree
 nittaTestCase name net alg = testCase name $ do
     -- TODO: rename evalNittaTestState
     --void $ evalUnitTestState name (TargetSynthesis{tMicroArch = net}) alg
-    void $ evalUnitTestState name (TargetSynthesis{tSourceCode = Nothing, tMicroArch = net}) alg
+    void $ evalUnitTestState name net alg
 
 -----
 

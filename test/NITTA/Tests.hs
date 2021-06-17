@@ -46,19 +46,23 @@ import Test.Tasty.TH
 -- FIXME: avoid NITTA.Model.Tests.Internals usage
 
 test_fibonacci =
-    [ nittaTestCase "simple" march $ do
-        assignNaive (F.loop (0 :: Int) (T.pack "b2") (map T.pack ["a1"])) []
-        -- assignNaive (F.loop 1 "c" ["b1", "b2"]) []
-        --       assignNaive (F.add "a1" "b1" ["c"]) []
+    [ nittaTestCase "simple" ts $ do
+        modifyNetwork march
+        assignNaive (F.loop 0 "b2" ["a1"]) []
+        assignNaive (F.loop 1 "c" ["b1", "b2"]) []
+        assignNaive (F.add "a1" "b1" ["c"]) []
         assertSynthesisFinished
-    , nittaTestCase "io_drop_data" (marchSPIDropData True pInt) $ do
+    , nittaTestCase "io_drop_data" ts $ do
+        modifyNetwork (marchSPIDropData True pInt)
         assignsNaive algWithSend []
         assertSynthesisFinished
-    , nittaTestCase "io_no_drop_data" (marchSPI True pInt) $ do
+    , nittaTestCase "io_no_drop_data" ts $ do
+        modifyNetwork (marchSPI True pInt)
         assignsNaive algWithSend []
         assertSynthesisFinished
     ]
     where
+        ts = def :: TargetSynthesis _ _ _ Int
         algWithSend =
             [ F.loop 0 "b2" ["a1"]
             , F.loop 1 "c1" ["b1", "b2"]
