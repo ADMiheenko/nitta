@@ -133,6 +133,7 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     modifyNetwork,
     setBusType,
     assignLua,
+    traceDataflow,
     assertSynthesisFinished,
 ) where
 
@@ -161,39 +162,7 @@ import Prettyprinter (pretty)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 
-assertSynthesisFinished = do
-    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}, cntxCycle} <- get
-    when (null functs && isNothing tSourceCode) $
-        lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
-    let wd = toModuleName $ toString testName
-    status <-
-        lift $
-            runSynthesis
-                ta
-                    { tName = if isJust tSourceCode then "lua_" <> wd else wd
-                    , tDFG = fsToDataFlowGraph functs
-                    , tReceivedValues = cntxCycle
-                    }
-    when (isLeft status) $
-        lift $ assertFailure $ fromLeft "target synthesis failed" status
-
-runSynthesis target = do
-    reportE <- runTargetSynthesisWithUniqName target
-    return $ case reportE of
-        Left err -> Left $ "synthesis process fail " <> err
-        Right TestbenchReport{tbStatus = True} -> Right ()
-        Right report@TestbenchReport{tbCompilerDump}
-            | T.length tbCompilerDump > 2 ->
-                Left $ "icarus synthesis error:\n" <> show report
-        Right report@TestbenchReport{} ->
-            Left $ "icarus simulation error:\n" <> show report
-
-modifyNetwork network = do
-    st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
-    put st{unit = ts{tMicroArch = network}}
-
 --transferVariables ["a","b"]
---traceDataflows
 --    assertSynthesisInclude AccumOptimization{....}
 --    assertSynthesisInclude ResolveDeadlock{....}
 
@@ -285,6 +254,10 @@ assignLua src = do
 setBusType busType = do
     st@UnitTestState{} <- get
     put st{busType = Just busType}
+
+modifyNetwork network = do
+    st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
+    put st{unit = ts{tMicroArch = network}}
 
 -- | Make synthesis decision with provided Endpoint Role and automatically assigned time
 decide :: EndpointRole v -> DSLStatement pu v x t ()
@@ -391,6 +364,33 @@ assertSynthesisDone = do
     unless (isProcessComplete unit functs && null (endpointOptions unit)) $
         lift $ assertFailure $ testName <> " Process is not done: " <> incompleteProcessMsg unit functs
 
+assertSynthesisFinished = do
+    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}, cntxCycle} <- get
+    when (null functs && isNothing tSourceCode) $
+        lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
+    let wd = toModuleName $ toString testName
+    status <-
+        lift $
+            runSynthesis
+                ta
+                    { tName = if isJust tSourceCode then "lua_" <> wd else wd
+                    , tDFG = fsToDataFlowGraph functs
+                    , tReceivedValues = cntxCycle
+                    }
+    when (isLeft status) $
+        lift $ assertFailure $ fromLeft "target synthesis failed" status
+
+runSynthesis target = do
+    reportE <- runTargetSynthesisWithUniqName target
+    return $ case reportE of
+        Left err -> Left $ "synthesis process fail " <> err
+        Right TestbenchReport{tbStatus = True} -> Right ()
+        Right report@TestbenchReport{tbCompilerDump}
+            | T.length tbCompilerDump > 2 ->
+                Left $ "icarus synthesis error:\n" <> show report
+        Right report@TestbenchReport{} ->
+            Left $ "icarus simulation error:\n" <> show report
+
 assertLocks :: (Locks pu v) => [Lock v] -> DSLStatement pu v x t ()
 assertLocks expectLocks = do
     UnitTestState{unit} <- get
@@ -444,4 +444,9 @@ traceEndpoints = do
 traceProcess = do
     UnitTestState{unit} <- get
     lift $ putStrLn $ "Process: " <> show (pretty $ process unit)
+    return ()
+
+traceDataflow = do
+    UnitTestState{unit = ts@TargetSynthesis{tDFG}} <- get
+    lift $ putStrLn $ "Dataflow: " <> show tDFG
     return ()
