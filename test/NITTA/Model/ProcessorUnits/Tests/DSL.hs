@@ -165,11 +165,12 @@ assertSynthesisFinished = do
     UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}, cntxCycle} <- get
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
+    let wd = toModuleName $ toString testName
     status <-
         lift $
             runSynthesis
                 ta
-                    { tName = toModuleName $ toString testName
+                    { tName = if isJust tSourceCode then "lua_" <> wd else wd
                     , tDFG = fsToDataFlowGraph functs
                     , tReceivedValues = cntxCycle
                     }
@@ -193,6 +194,8 @@ modifyNetwork network = do
 
 --transferVariables ["a","b"]
 --traceDataflows
+--    assertSynthesisInclude AccumOptimization{....}
+--    assertSynthesisInclude ResolveDeadlock{....}
 
 nittaTestCase ::
     HasCallStack =>
