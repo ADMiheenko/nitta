@@ -128,28 +128,26 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     traceEndpoints,
     traceProcess,
 
-    -- *Bus
+    -- *Target synthesis
     nittaTestCase,
     modifyNetwork,
+    setBusType,
+    assignLua,
     assertSynthesisFinished,
 ) where
 
 import Control.Monad.Identity
 import Control.Monad.State.Lazy
 import Data.CallStack
-import Data.Default
 import Data.Either
 import Data.List (find)
 import Data.Maybe
 import Data.Proxy
 import qualified Data.Set as S
 import Data.String.ToString
-import qualified Data.String.Utils as S
-import Data.Text (Text)
 import qualified Data.Text as T
 import NITTA.Intermediate.DataFlow
 import NITTA.Intermediate.Types
-import NITTA.Model.Networks.Bus
 import NITTA.Model.Networks.Types (PUClasses)
 import NITTA.Model.Problems
 import NITTA.Model.ProcessorUnits
@@ -163,25 +161,15 @@ import Prettyprinter (pretty)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 
-setBusType busType = do
-    st@UnitTestState{} <- get
-    put st{busType = busType}
-
-luaSource src = do
-    st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
-    -- TODO: keep functs?
-    put st{functs = [], unit = ts{tSourceCode = src}}
-
--- TODO: refactor
 assertSynthesisFinished = do
     UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}, cntxCycle} <- get
     when (null functs && isNothing tSourceCode) $
-        lift $ assertFailure "Can't run target synthesis, tou haven't provided any functions or source code"
+        lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     status <-
         lift $
             runSynthesis
                 ta
-                    { tName = S.replace " " "_" $ toString testName
+                    { tName = toModuleName $ toString testName
                     , tDFG = fsToDataFlowGraph functs
                     , tReceivedValues = cntxCycle
                     }
@@ -207,17 +195,13 @@ modifyNetwork network = do
 --traceDataflows
 
 nittaTestCase ::
-    (HasCallStack) =>
+    HasCallStack =>
     String ->
     pu ->
     DSLStatement2 pu v x cx () ->
     TestTree
 nittaTestCase name net alg = testCase name $ do
-    -- TODO: rename evalNittaTestState
-    --void $ evalUnitTestState name (TargetSynthesis{tMicroArch = net}) alg
     void $ evalUnitTestState name net alg
-
------
 
 unitTestCase ::
     (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) =>
@@ -290,6 +274,14 @@ setValue var val = do
     put pu{cntxCycle = (var, val) : cntxCycle}
     where
         isVarAvailable v pu = S.isSubsetOf (S.fromList [v]) $ inpVars $ functions pu
+
+assignLua src = do
+    st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
+    put st{unit = ts{tSourceCode = Just src}}
+
+setBusType busType = do
+    st@UnitTestState{} <- get
+    put st{busType = Just busType}
 
 -- | Make synthesis decision with provided Endpoint Role and automatically assigned time
 decide :: EndpointRole v -> DSLStatement pu v x t ()

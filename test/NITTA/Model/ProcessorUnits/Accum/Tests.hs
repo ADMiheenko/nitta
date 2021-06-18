@@ -25,6 +25,7 @@ import NITTA.Intermediate.Functions as F
 import NITTA.LuaFrontend.Tests.Providers
 import NITTA.Model.ProcessorUnits.Tests.Providers
 import NITTA.Model.Tests.Providers
+import NITTA.Synthesis
 import Test.QuickCheck
 import Test.Tasty (testGroup)
 
@@ -138,6 +139,18 @@ tests =
                 end
                 sum(0,0,0)
             |]
+        , nittaTestCase "fixpoint 22 32" ts $ do
+            modifyNetwork $ microarch ASync SlaveSPI
+            setBusType pFX22_32
+            assignLua
+                [__i|
+                      function f()
+                          send(0.5 - 0.25)
+                          send(-1.25 + 2.5)
+                      end
+                      f()
+                  |]
+            assertSynthesisFinished
         , typedLuaTestCase
             (microarch ASync SlaveSPI)
             pFX22_32
@@ -303,6 +316,7 @@ tests =
             assertCoSimulation
         ]
     where
+        ts = def :: TargetSynthesis T.Text T.Text _ Int
         accumDef = def :: Accum T.Text Int Int
         u2 = def :: Accum T.Text (Attr (IntX 8)) Int
         fsGen = algGen [packF <$> (arbitrary :: Gen (Acc _ _))]
