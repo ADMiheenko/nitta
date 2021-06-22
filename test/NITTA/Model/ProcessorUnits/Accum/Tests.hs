@@ -140,7 +140,7 @@ tests =
                 sum(0,0,0)
             |]
         , unitTestCase "fixpoint 22 32" ts $ do
-            modifyNetwork $ microarch ASync SlaveSPI
+            setNetwork $ microarch ASync SlaveSPI
             setBusType pFX22_32
             assignLua
                 [__i|

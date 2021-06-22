@@ -373,7 +373,7 @@ test_trace_features =
 
 test_examples =
     [ unitTestCase "teacup io wait" ts $ do
-        modifyNetwork $ microarch Sync SlaveSPI
+        setNetwork $ microarch Sync SlaveSPI
         setBusType pFX22_32
         assignLua $(embedStringFile "examples/teacup.lua")
         assertSynthesisFinished
@@ -498,7 +498,7 @@ test_examples =
         $(embedStringFile "examples/spi3.lua")
     ]
 
-ts = def :: TargetSynthesis T.Text T.Text _ Int
+ts = def :: Val x => TargetSynthesis T.Text T.Text x Int
 
 tests :: TestTree
 tests = $(testGroupGenerator)

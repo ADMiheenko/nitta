@@ -129,7 +129,7 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     traceProcess,
 
     -- *Target synthesis
-    modifyNetwork,
+    setNetwork,
     setBusType,
     setRecievedValue,
     setRecievedValues,
@@ -223,7 +223,7 @@ assignNaive f cntxs = do
 
 -- | set initital values for coSimulation input variables
 setValues :: (Function f v, WithFunctions pu f) => [(v, x)] -> DSLStatement pu v x t ()
-setValues = mapM_ (uncurry setValue)
+setValues = mapM_ $ uncurry setValue
 
 -- | set initital value for coSimulation input variables
 setValue :: (Var v, Function f v, WithFunctions pu f) => v -> x -> DSLStatement pu v x t ()
@@ -241,17 +241,15 @@ assignLua src = do
     st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
     put st{unit = ts{tSourceCode = Just src}}
 
-setBusType busType = do
-    st@UnitTestState{} <- get
-    put st{busType = Just busType}
+setBusType busType = modify' $ \st -> st{busType = Just busType}
 
-setRecievedValues = mapM_ setRecievedValue
+setRecievedValues = mapM_ $ uncurry setRecievedValue
 
-setRecievedValue v = do
+setRecievedValue var val = do
     st@UnitTestState{unit = ts@TargetSynthesis{tReceivedValues = vs}} <- get
-    put st{unit = ts{tReceivedValues = v : vs}}
+    put st{unit = ts{tReceivedValues = (var, val) : vs}}
 
-modifyNetwork network = do
+setNetwork network = do
     st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
     put st{unit = ts{tMicroArch = network}}
 
@@ -442,6 +440,6 @@ traceProcess = do
     return ()
 
 traceDataflow = do
-    UnitTestState{unit = ts@TargetSynthesis{tDFG}} <- get
+    UnitTestState{unit = TargetSynthesis{tDFG}} <- get
     lift $ putStrLn $ "Dataflow: " <> show tDFG
     return ()
