@@ -48,15 +48,15 @@ test_fibonacci =
         assignNaive (F.loop 0 "b2" ["a1"]) []
         assignNaive (F.loop 1 "c" ["b1", "b2"]) []
         assignNaive (F.add "a1" "b1" ["c"]) []
-        assertSynthesisFinished
+        assertSynthesisDoneT
     , unitTestCase "io_drop_data" ts $ do
         setNetwork $ marchSPIDropData True pInt
         assignsNaive algWithSend []
-        assertSynthesisFinished
+        assertSynthesisDoneT
     , unitTestCase "io_no_drop_data" ts $ do
         setNetwork $ marchSPI True pInt
         assignsNaive algWithSend []
-        assertSynthesisFinished
+        assertSynthesisDoneT
     ]
     where
         algWithSend =
@@ -88,7 +88,7 @@ test_add_and_io =
             , ("e", [0 .. 25])
             , ("f", [20 .. 30])
             ]
-        assertSynthesisFinished
+        assertSynthesisDoneT
     ]
 
 ts = def :: TargetSynthesis _ _ _ _

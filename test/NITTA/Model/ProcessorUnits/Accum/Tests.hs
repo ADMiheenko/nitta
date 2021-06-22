@@ -150,7 +150,7 @@ tests =
                       end
                       f()
                   |]
-            assertSynthesisFinished
+            assertSynthesisDoneT
         , typedLuaTestCase
             (microarch ASync SlaveSPI)
             pFX22_32

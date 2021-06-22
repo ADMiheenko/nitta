@@ -376,7 +376,7 @@ test_examples =
         setNetwork $ microarch Sync SlaveSPI
         setBusType pFX22_32
         assignLua $(embedStringFile "examples/teacup.lua")
-        assertSynthesisFinished
+        assertSynthesisDoneT
     , typedLuaTestCase
         (microarch ASync SlaveSPI)
         pFX22_32

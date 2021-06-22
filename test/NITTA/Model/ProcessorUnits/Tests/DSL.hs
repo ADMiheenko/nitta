@@ -135,7 +135,7 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     setRecievedValues,
     assignLua,
     traceDataflow,
-    assertSynthesisFinished,
+    assertSynthesisDoneT,
 ) where
 
 import Control.Monad.Identity
@@ -358,7 +358,7 @@ assertSynthesisDone = do
     unless (isProcessComplete unit functs && null (endpointOptions unit)) $
         lift $ assertFailure $ testName <> " Process is not done: " <> incompleteProcessMsg unit functs
 
-assertSynthesisFinished = do
+assertSynthesisDoneT = do
     UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
