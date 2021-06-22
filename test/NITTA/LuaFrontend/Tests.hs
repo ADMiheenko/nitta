@@ -372,7 +372,7 @@ test_trace_features =
     ]
 
 test_examples =
-    [ nittaTestCase "teacup io wait" ts $ do
+    [ unitTestCase "teacup io wait" ts $ do
         modifyNetwork $ microarch Sync SlaveSPI
         setBusType pFX22_32
         assignLua $(embedStringFile "examples/teacup.lua")

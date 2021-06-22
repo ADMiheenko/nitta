@@ -75,5 +75,11 @@ typedIOLuaTestCase ::
     [(T.Text, [x])] ->
     T.Text ->
     TestTree
+typedIOLuaTestCase arch proxy name received src = unitTestCase name ts $ do
+    modifyNetwork arch
+    setBusType proxy
+    setRecievedValues received
+    assignLua src
+    assertSynthesisFinished
 
 ts = def :: TargetSynthesis T.Text T.Text _ Int

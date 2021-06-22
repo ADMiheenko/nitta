@@ -129,9 +129,10 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     traceProcess,
 
     -- *Target synthesis
-    nittaTestCase,
     modifyNetwork,
     setBusType,
+    setRecievedValue,
+    setRecievedValues,
     assignLua,
     traceDataflow,
     assertSynthesisFinished,
@@ -166,26 +167,17 @@ import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 --    assertSynthesisInclude AccumOptimization{....}
 --    assertSynthesisInclude ResolveDeadlock{....}
 
-nittaTestCase ::
+unitTestCase ::
     HasCallStack =>
     String ->
-    pu ->
-    DSLStatement2 pu v x cx () ->
-    TestTree
-nittaTestCase name net alg = testCase name $ do
-    void $ evalUnitTestState name net alg
-
-unitTestCase ::
-    (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) =>
-    String ->
-    pu ->
-    DSLStatement pu v x t () ->
+    u ->
+    StateT (UnitTestState u v x) IO () ->
     TestTree
 unitTestCase name pu alg = testCase name $ do
     void $ evalUnitTestState name pu alg
 
 -- | State of the processor unit used in test
-data UnitTestState pu v x cx = UnitTestState
+data UnitTestState pu v x = UnitTestState
     { testName :: String
     , -- | Processor unit model.
       unit :: pu
@@ -195,15 +187,13 @@ data UnitTestState pu v x cx = UnitTestState
       -- 2. assignNaive - will be binded during naive synthesis.
       functs :: [F v x]
     , -- | Initial values for coSimulation
-      cntxCycle :: [(v, cx)]
+      cntxCycle :: [(v, x)]
     , -- | TODO: add suitable type
       busType :: Maybe (Proxy x)
     }
     deriving (Show)
 
-type DSLStatement2 pu v x cx r = HasCallStack => StateT (UnitTestState pu v x cx) IO r
-
-type DSLStatement pu v x t r = (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) => StateT (UnitTestState pu v x x) IO r
+type DSLStatement pu v x t r = (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) => StateT (UnitTestState pu v x) IO r
 
 evalUnitTestState name st alg = evalStateT alg (UnitTestState name st [] [] Nothing)
 
@@ -254,6 +244,12 @@ assignLua src = do
 setBusType busType = do
     st@UnitTestState{} <- get
     put st{busType = Just busType}
+
+setRecievedValues = mapM_ setRecievedValue
+
+setRecievedValue v = do
+    st@UnitTestState{unit = ts@TargetSynthesis{tReceivedValues = vs}} <- get
+    put st{unit = ts{tReceivedValues = v : vs}}
 
 modifyNetwork network = do
     st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
@@ -365,7 +361,7 @@ assertSynthesisDone = do
         lift $ assertFailure $ testName <> " Process is not done: " <> incompleteProcessMsg unit functs
 
 assertSynthesisFinished = do
-    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}, cntxCycle} <- get
+    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
@@ -375,7 +371,6 @@ assertSynthesisFinished = do
                 ta
                     { tName = if isJust tSourceCode then "lua_" <> wd else wd
                     , tDFG = fsToDataFlowGraph functs
-                    , tReceivedValues = cntxCycle
                     }
     when (isLeft status) $
         lift $ assertFailure $ fromLeft "target synthesis failed" status

@@ -139,7 +139,7 @@ tests =
                 end
                 sum(0,0,0)
             |]
-        , nittaTestCase "fixpoint 22 32" ts $ do
+        , unitTestCase "fixpoint 22 32" ts $ do
             modifyNetwork $ microarch ASync SlaveSPI
             setBusType pFX22_32
             assignLua
