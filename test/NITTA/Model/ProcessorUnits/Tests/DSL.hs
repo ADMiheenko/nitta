@@ -152,6 +152,7 @@ import Data.String.ToString
 import qualified Data.Text as T
 import NITTA.Intermediate.DataFlow
 import NITTA.Intermediate.Types
+import NITTA.LuaFrontend
 import NITTA.Model.Networks.Types (PUClasses)
 import NITTA.Model.Problems
 import NITTA.Model.ProcessorUnits
@@ -169,21 +170,24 @@ import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 -- TODO: is it possible to avoid new data?
 data OptimizationType = BreakLoopOpt | OptimizeAccumOpt | ConstantFoldingOpt | ResolveDeadlockOpt
 
-assertSynthesisInclude optim = do
-    UnitTestState{unit = TargetSynthesis{tDFG}} <- get
-    case optim of
-        BreakLoopOpt ->
-            unless (null $ breakLoopOptions tDFG) $
-                lift $ assertFailure $ "There is break loop options left"
-        OptimizeAccumOpt ->
-            unless (null $ optimizeAccumOptions tDFG) $
-                lift $ assertFailure $ "There is accum optimization left"
-        ConstantFoldingOpt ->
-            unless (null $ constantFoldingOptions tDFG) $
-                lift $ assertFailure $ "There is constant folding options left"
-        ResolveDeadlockOpt ->
-            unless (null $ resolveDeadlockOptions tDFG) $
-                lift $ assertFailure $ "There is resolve deadlock options left"
+assertSynthesisInclude optimisation =
+    let translateToIntermediate = return . frDataFlow . lua2functions
+     in do
+            UnitTestState{unit = TargetSynthesis{tDFG, tSourceCode}} <- get
+            tDFG' <- maybe (return tDFG) translateToIntermediate tSourceCode
+            case optimisation of
+                BreakLoopOpt ->
+                    unless (null $ breakLoopOptions tDFG') $
+                        lift $ assertFailure "There are break loop options left"
+                OptimizeAccumOpt ->
+                    unless (null $ optimizeAccumOptions tDFG') $
+                        lift $ assertFailure "There are accum optimization left"
+                ConstantFoldingOpt ->
+                    unless (null $ constantFoldingOptions tDFG') $
+                        lift $ assertFailure "There are constant folding options left"
+                ResolveDeadlockOpt ->
+                    unless (null $ resolveDeadlockOptions tDFG') $
+                        lift $ assertFailure "There are resolve deadlock options left"
 
 unitTestCase ::
     HasCallStack =>
@@ -382,16 +386,15 @@ assertSynthesisDoneT = do
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
-    status <-
-        lift $
-            runSynthesis
-                ta
-                    { tName = if isJust tSourceCode then "lua_" <> wd else wd
-                    , tDFG = fsToDataFlowGraph functs
-                    }
+    let taUpd =
+            ta
+                { tName = if isJust tSourceCode then "lua_" <> wd else wd
+                , tDFG = fsToDataFlowGraph functs
+                }
+    status <- lift $ runSynthesis taUpd
     when (isLeft status) $
         lift $ assertFailure $ fromLeft "target synthesis failed" status
-    put st{report = status}
+    put st{report = status, unit = taUpd}
 
 runSynthesis target = do
     reportE <- runTargetSynthesisWithUniqName target
