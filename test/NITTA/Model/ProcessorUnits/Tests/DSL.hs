@@ -136,6 +136,8 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     assignLua,
     traceDataflow,
     assertSynthesisDoneT,
+    assertSynthesisInclude,
+    OptimizationType (..),
 ) where
 
 import Control.Monad.Identity
@@ -163,9 +165,25 @@ import Prettyprinter (pretty)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 
---transferVariables ["a","b"]
---    assertSynthesisInclude AccumOptimization{....}
---    assertSynthesisInclude ResolveDeadlock{....}
+-- TODO: transferVariables ["a","b"]
+-- TODO: is it possible to avoid new data?
+data OptimizationType = BreakLoopOpt | OptimizeAccumOpt | ConstantFoldingOpt | ResolveDeadlockOpt
+
+assertSynthesisInclude optim = do
+    UnitTestState{unit = TargetSynthesis{tDFG}} <- get
+    case optim of
+        BreakLoopOpt ->
+            unless (null $ breakLoopOptions tDFG) $
+                lift $ assertFailure $ "There is break loop options left"
+        OptimizeAccumOpt ->
+            unless (null $ optimizeAccumOptions tDFG) $
+                lift $ assertFailure $ "There is accum optimization left"
+        ConstantFoldingOpt ->
+            unless (null $ constantFoldingOptions tDFG) $
+                lift $ assertFailure $ "There is constant folding options left"
+        ResolveDeadlockOpt ->
+            unless (null $ resolveDeadlockOptions tDFG) $
+                lift $ assertFailure $ "There is resolve deadlock options left"
 
 unitTestCase ::
     HasCallStack =>
@@ -190,12 +208,13 @@ data UnitTestState pu v x = UnitTestState
       cntxCycle :: [(v, x)]
     , -- | TODO: add suitable type
       busType :: Maybe (Proxy x)
+    , report :: Either String (TestbenchReport v x)
     }
     deriving (Show)
 
 type DSLStatement pu v x t r = (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) => StateT (UnitTestState pu v x) IO r
 
-evalUnitTestState name st alg = evalStateT alg (UnitTestState name st [] [] Nothing)
+evalUnitTestState name st alg = evalStateT alg (UnitTestState name st [] [] Nothing $ Left "Report not ready!")
 
 -- | Binds several provided functions to PU
 assigns alg = mapM_ assign alg
@@ -359,7 +378,7 @@ assertSynthesisDone = do
         lift $ assertFailure $ testName <> " Process is not done: " <> incompleteProcessMsg unit functs
 
 assertSynthesisDoneT = do
-    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
+    st@UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
@@ -372,12 +391,13 @@ assertSynthesisDoneT = do
                     }
     when (isLeft status) $
         lift $ assertFailure $ fromLeft "target synthesis failed" status
+    put st{report = status}
 
 runSynthesis target = do
     reportE <- runTargetSynthesisWithUniqName target
     return $ case reportE of
         Left err -> Left $ "synthesis process fail " <> err
-        Right TestbenchReport{tbStatus = True} -> Right ()
+        Right report@TestbenchReport{tbStatus = True} -> Right report
         Right report@TestbenchReport{tbCompilerDump}
             | T.length tbCompilerDump > 2 ->
                 Left $ "icarus synthesis error:\n" <> show report

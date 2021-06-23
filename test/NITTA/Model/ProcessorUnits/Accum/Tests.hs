@@ -127,10 +127,12 @@ tests =
             [("a", 1), ("b", 2), ("e", 4), ("f", -4), ("j", 8)]
             [ accFromStr "+a +b = c = d; +e -f = g; +j = k"
             ]
-        , luaTestCase
-            "test_accum_optimization_and_deadlock_resolve"
+        , unitTestCase "test_accum_optimization_and_deadlock_resolve" ts2 $ do
             -- TODO: We need to check that synthesis process do all needed refactoring
-            [__i|
+            setNetwork $ microarch ASync SlaveSPI
+            setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
+            assignLua
+                [__i|
                 function sum(a, b, c)
                     local d = a + b + c -- should AccumOptimization
                     local e = d + 1 -- e and d should be buffered
@@ -139,6 +141,9 @@ tests =
                 end
                 sum(0,0,0)
             |]
+            assertSynthesisDoneT
+            assertSynthesisInclude OptimizeAccumOpt
+            assertSynthesisInclude ConstantFoldingOpt
         , unitTestCase "fixpoint 22 32" ts $ do
             setNetwork $ microarch ASync SlaveSPI
             setBusType pFX22_32
@@ -316,7 +321,8 @@ tests =
             assertCoSimulation
         ]
     where
-        ts = def :: TargetSynthesis T.Text T.Text _ Int
+        ts = def :: Val x => TargetSynthesis T.Text T.Text x Int
+        ts2 = def :: Val x => TargetSynthesis T.Text T.Text x Int
         accumDef = def :: Accum T.Text Int Int
         u2 = def :: Accum T.Text (Attr (IntX 8)) Int
         fsGen = algGen [packF <$> (arbitrary :: Gen (Acc _ _))]
