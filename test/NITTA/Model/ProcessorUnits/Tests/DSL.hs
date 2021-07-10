@@ -135,9 +135,12 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     setRecievedValues,
     assignLua,
     traceDataflow,
+    traceBus,
     assertSynthesisDoneT,
+    assertSynthesisRunT,
     assertSynthesisInclude,
     OptimizationType (..),
+    toDfg,
 ) where
 
 import Control.Monad.Identity
@@ -153,6 +156,7 @@ import qualified Data.Text as T
 import NITTA.Intermediate.DataFlow
 import NITTA.Intermediate.Types
 import NITTA.LuaFrontend
+import NITTA.Model.Networks.Bus
 import NITTA.Model.Networks.Types (PUClasses)
 import NITTA.Model.Problems
 import NITTA.Model.ProcessorUnits
@@ -170,24 +174,24 @@ import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 -- TODO: is it possible to avoid new data?
 data OptimizationType = BreakLoopOpt | OptimizeAccumOpt | ConstantFoldingOpt | ResolveDeadlockOpt
 
-assertSynthesisInclude optimisation =
-    let translateToIntermediate = return . frDataFlow . lua2functions
-     in do
-            UnitTestState{unit = TargetSynthesis{tDFG, tSourceCode}} <- get
-            tDFG' <- maybe (return tDFG) translateToIntermediate tSourceCode
-            case optimisation of
-                BreakLoopOpt ->
-                    unless (null $ breakLoopOptions tDFG') $
-                        lift $ assertFailure "There are break loop options left"
-                OptimizeAccumOpt ->
-                    unless (null $ optimizeAccumOptions tDFG') $
-                        lift $ assertFailure "There are accum optimization left"
-                ConstantFoldingOpt ->
-                    unless (null $ constantFoldingOptions tDFG') $
-                        lift $ assertFailure "There are constant folding options left"
-                ResolveDeadlockOpt ->
-                    unless (null $ resolveDeadlockOptions tDFG') $
-                        lift $ assertFailure "There are resolve deadlock options left"
+-- TODO: without negative tests hard to verify
+-- mb you should run snd function but how to catch (on user will??)
+assertSynthesisInclude optimisation = do
+    toDfg
+    UnitTestState{unit = TargetSynthesis{tDFG}} <- get
+    case optimisation of
+        BreakLoopOpt ->
+            unless (null $ breakLoopOptions tDFG) $
+                lift $ assertFailure "There are break loop options left"
+        OptimizeAccumOpt ->
+            unless (null $ optimizeAccumOptions tDFG) $
+                lift $ assertFailure "There are accum optimization left"
+        ConstantFoldingOpt ->
+            unless (null $ constantFoldingOptions tDFG) $
+                lift $ assertFailure "There are constant folding options left"
+        ResolveDeadlockOpt ->
+            unless (null $ resolveDeadlockOptions tDFG) $
+                lift $ assertFailure "There are resolve deadlock options left"
 
 unitTestCase ::
     HasCallStack =>
@@ -259,6 +263,15 @@ setValue var val = do
     put pu{cntxCycle = (var, val) : cntxCycle}
     where
         isVarAvailable v pu = S.isSubsetOf (S.fromList [v]) $ inpVars $ functions pu
+
+-- | run translation to DataFlow graph (override old tDFG)
+toDfg =
+    -- TODO: mb better to allow user run this command?
+    let translateToIntermediate = return . frDataFlow . lua2functions
+     in do
+            st@UnitTestState{functs, unit = ts@TargetSynthesis{tSourceCode}} <- get
+            tDFG' <- maybe (return $ fsToDataFlowGraph functs) translateToIntermediate tSourceCode
+            put st{unit = ts{tDFG = tDFG'}}
 
 assignLua src = do
     st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
@@ -381,20 +394,21 @@ assertSynthesisDone = do
     unless (isProcessComplete unit functs && null (endpointOptions unit)) $
         lift $ assertFailure $ testName <> " Process is not done: " <> incompleteProcessMsg unit functs
 
+-- | Run both synthesis and Testbench without saving any intermediate unit representation.
 assertSynthesisDoneT = do
-    st@UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
+    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
+    toDfg
     let taUpd =
             ta
                 { tName = if isJust tSourceCode then "lua_" <> wd else wd
-                , tDFG = fsToDataFlowGraph functs
                 }
     status <- lift $ runSynthesis taUpd
+    -- TODO: do we need ability to save result (pUnit) of synthesis
     when (isLeft status) $
         lift $ assertFailure $ fromLeft "target synthesis failed" status
-    put st{report = status, unit = taUpd}
 
 runSynthesis target = do
     reportE <- runTargetSynthesisWithUniqName target
@@ -406,6 +420,23 @@ runSynthesis target = do
                 Left $ "icarus synthesis error:\n" <> show report
         Right report@TestbenchReport{} ->
             Left $ "icarus simulation error:\n" <> show report
+
+-- | Run only synthesis without Testbench. Saves resulting unit to State.
+assertSynthesisRunT = do
+    -- TODO: DRY
+    st@UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
+    when (null functs && isNothing tSourceCode) $
+        lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
+    let wd = toModuleName $ toString testName
+    toDfg
+    let taUpd =
+            ta
+                { tName = if isJust tSourceCode then "lua_" <> wd else wd
+                }
+    res <- lift $ synthesizeTargetSystemWithUniqName taUpd
+    case res of
+        Left l -> lift $ assertFailure $ "target synthesis failed" <> show l
+        Right r -> put st{unit = ta{tMicroArch = pUnit r}}
 
 assertLocks :: (Locks pu v) => [Lock v] -> DSLStatement pu v x t ()
 assertLocks expectLocks = do
@@ -465,4 +496,9 @@ traceProcess = do
 traceDataflow = do
     UnitTestState{unit = TargetSynthesis{tDFG}} <- get
     lift $ putStrLn $ "Dataflow: " <> show tDFG
+    return ()
+
+traceBus = do
+    UnitTestState{unit = TargetSynthesis{tMicroArch = b@BusNetwork{}}} <- get
+    lift $ putStrLn $ "Bus " <> show (pretty $ process b)
     return ()

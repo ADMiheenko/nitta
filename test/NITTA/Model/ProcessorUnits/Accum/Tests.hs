@@ -141,9 +141,31 @@ tests =
                 end
                 sum(0,0,0)
             |]
-            assertSynthesisDoneT
+            assertSynthesisRunT
             assertSynthesisInclude OptimizeAccumOpt
             assertSynthesisInclude ConstantFoldingOpt
+            traceDataflow
+            traceBus
+        , unitTestCase "negative optimisation test" tbr $ do
+            setNetwork $ maBroken ubr{wrongAttr = True}
+            assertSynthesisInclude OptimizeAccumOpt
+            assertSynthesisInclude ConstantFoldingOpt
+            setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
+            assignLua
+                [__i|
+                function sum(a, b, c)
+                    local d = a + b + c -- should AccumOptimization
+                    local e = d + 1 -- e and d should be buffered
+                    local f = d + 2
+                    sum(d, f, e)
+                end
+                sum(0,0,0)
+            |]
+            assertSynthesisRunT
+            assertSynthesisInclude OptimizeAccumOpt
+            assertSynthesisInclude ConstantFoldingOpt
+            traceDataflow
+            traceBus
         , unitTestCase "fixpoint 22 32" ts $ do
             setNetwork $ microarch ASync SlaveSPI
             setBusType pFX22_32
@@ -323,6 +345,8 @@ tests =
     where
         ts = def :: Val x => TargetSynthesis T.Text T.Text x Int
         ts2 = def :: Val x => TargetSynthesis T.Text T.Text x Int
+        tbr = def :: Val x => TargetSynthesis T.Text T.Text x Int
+        ubr = def :: Broken T.Text (Attr (IntX 32)) Int
         accumDef = def :: Accum T.Text Int Int
         u2 = def :: Accum T.Text (Attr (IntX 8)) Int
         fsGen = algGen [packF <$> (arbitrary :: Gen (Acc _ _))]
