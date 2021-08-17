@@ -134,7 +134,10 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     setRecievedValue,
     setRecievedValues,
     assignLua,
+    bindVariables,
+    traceBindVariables,
     traceDataflow,
+    traceDataflowOptions,
     traceBus,
     assertSynthesisDoneT,
     assertSynthesisRunT,
@@ -289,6 +292,10 @@ setNetwork network = do
     st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
     put st{unit = ts{tMicroArch = network}}
 
+bindVariables = do
+    st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch, tDFG}} <- get
+    root <- lift $ targetUnit <$> synthesisTreeRootIO (mkModelWithOneNetwork tMicroArch tDFG)
+    put st{unit = ts{tMicroArch = root}}
 -- | Make synthesis decision with provided Endpoint Role and automatically assigned time
 decide :: EndpointRole v -> DSLStatement pu v x t ()
 decide role = do
@@ -394,7 +401,7 @@ assertSynthesisDone = do
     unless (isProcessComplete unit functs && null (endpointOptions unit)) $
         lift $ assertFailure $ testName <> " Process is not done: " <> incompleteProcessMsg unit functs
 
--- | Run both synthesis and Testbench without saving any intermediate unit representation.
+-- | Run both automatic synthesis and Testbench without saving any intermediate unit representation.
 assertSynthesisDoneT = do
     UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
     when (null functs && isNothing tSourceCode) $
@@ -421,7 +428,7 @@ runSynthesis target = do
         Right report@TestbenchReport{} ->
             Left $ "icarus simulation error:\n" <> show report
 
--- | Run only synthesis without Testbench. Saves resulting unit to State.
+-- | Run only automatic synthesis without Testbench. Saves resulting unit to State.
 assertSynthesisRunT = do
     -- TODO: DRY
     st@UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
@@ -500,5 +507,15 @@ traceDataflow = do
 
 traceBus = do
     UnitTestState{unit = TargetSynthesis{tMicroArch = b@BusNetwork{}}} <- get
-    lift $ putStrLn $ "Bus " <> show (pretty $ process b)
+    lift $ putStrLn $ "Bus: " <> show (pretty $ process b)
+    return ()
+
+traceDataflowOptions = do
+    UnitTestState{unit = TargetSynthesis{tMicroArch = ma@BusNetwork{}}} <- get
+    lift $ putStrLn $ "Dataflow options: " <> show (dataflowOptions ma)
+    return ()
+
+traceBindVariables = do
+    UnitTestState{unit = TargetSynthesis{tMicroArch}} <- get
+    lift $ putStrLn $ "BindVariables: " <> show (bindOptions tMicroArch)
     return ()
