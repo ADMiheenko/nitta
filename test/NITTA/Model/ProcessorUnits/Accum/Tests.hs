@@ -21,7 +21,7 @@ import Data.Default
 import qualified Data.Set as S
 import Data.String.Interpolate
 import qualified Data.Text as T
-import NITTA.Intermediate.Functions as F
+import qualified NITTA.Intermediate.Functions as F
 import NITTA.LuaFrontend.Tests.Providers
 import NITTA.Model.ProcessorUnits.Tests.Providers
 import NITTA.Model.Tests.Providers
@@ -150,6 +150,67 @@ tests =
             setNetwork $ maBroken ubr{wrongAttr = True}
             assertSynthesisInclude OptimizeAccumOpt
             assertSynthesisInclude ConstantFoldingOpt
+            setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
+            assignLua
+                [__i|
+                function sum(a, b, c)
+                    local d = a + b + c -- should AccumOptimization
+                    local e = d + 1 -- e and d should be buffered
+                    local f = d + 2
+                    sum(d, f, e)
+                end
+                sum(0,0,0)
+            |]
+            traceDataflow
+            traceDataflowOptions
+            assertSynthesisInclude OptimizeAccumOpt
+            assertSynthesisInclude ConstantFoldingOpt
+        , unitTestCase "bus network detailed test" tbr $ do
+            setNetwork $ maBroken ubr
+            assertSynthesisInclude OptimizeAccumOpt
+            assertSynthesisInclude ConstantFoldingOpt
+            setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
+            assignLua
+                [__i|
+                function sum(a, b, c)
+                    local d = a + b + c -- should AccumOptimization
+                    local e = d + 1 -- e and d should be buffered
+                    local f = d + 2
+                    sum(d, f, e)
+                end
+                sum(0,0,0)
+            |]
+            traceDataflow
+            toDfg
+            traceDataflow
+            traceDataflowOptions
+            traceBindVariablesWithInit
+            bindPrepare
+            bindVariables (F.loop 0 "d#0" ["a#0"])
+            traceBindVariables
+            bindVariables (F.loop 0 "e#0" ["c#0"])
+            bindVariables (F.constant 1 ["1@const#0"])
+            bindVariables (F.constant 2 ["2@const#0"])
+            traceBindVariables
+            -- TODO: Does it bind both?
+            bindVariables (F.loop 0 "f#0" ["b#0"])
+            bindVariables (F.add "d#1" "2@const#0" ["f#0"])
+            traceBindVariables
+            traceDataflowOptions
+            -- works both variants
+            --transferVariables $ provide ["2@const#0"]
+            transferVariables $ consume "2@const#0"
+            traceDataflowOptions
+            traceBindVariables
+            bindVariables (F.add "d#2" "1@const#0" ["e#0"])
+            bindVariables (F.add "a#0" "b#0" ["tmp_0#0"])
+            traceBindVariables
+            bindVariables (F.add "tmp_0#0" "c#0" ["d#0", "d#1", "d#2"])
+            traceBindVariables
+            traceDataflowOptions
+            traceAvailableRefactor
+        , unitTestCase "transfer variable test" tbr $ do
+            setNetwork $ microarch ASync SlaveSPI
             setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
             assignLua
                 [__i|
