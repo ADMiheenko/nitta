@@ -565,3 +565,15 @@ traceBindVariablesWithInit = do
     root <- lift $ getTreeUnit tMicroArch tDFG
     lift $ putStrLn $ "BindVariables(i): " <> show (map (\(Bind f _) -> f) $ bindOptions root)
     return ()
+
+traceAvailableRefactor = do
+    UnitTestState{unit = TargetSynthesis{tMicroArch}} <- get
+    let breakLoopOpt = breakLoopOptions tMicroArch
+    let constantFoldingOpt = constantFoldingOptions tMicroArch
+    let optimizeAccumOpt = optimizeAccumOptions tMicroArch
+    let resolveDeadlockOpt = resolveDeadlockOptions tMicroArch
+    lift $ putStrLn $ "Available breakLoopOptions: " <> show breakLoopOpt
+    lift $ putStrLn $ "Available constantFoldingOptions : " <> show constantFoldingOpt
+    lift $ putStrLn $ "Available optimizeAccumOptions: " <> show optimizeAccumOpt
+    lift $ putStrLn $ "Available resolveDeadlockOptions: " <> show resolveDeadlockOpt
+    return ()
