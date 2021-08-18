@@ -140,6 +140,7 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     traceBindVariablesWithInit,
     traceDataflow,
     traceDataflowOptions,
+    traceAvailableRefactor,
     traceBus,
     assertSynthesisDoneT,
     assertSynthesisRunT,
@@ -177,7 +178,6 @@ import Prettyprinter (pretty)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 
--- TODO: transferVariables ["a","b"]
 -- TODO: is it possible to avoid new data?
 data OptimizationType = BreakLoopOpt | OptimizeAccumOpt | ConstantFoldingOpt | ResolveDeadlockOpt
 
@@ -317,9 +317,13 @@ transferVariablesAt v from to = transferVariables' v $ Just (from, to)
 -- TODO: is it possible to use unsafe parameter?
 transferVariables' v intrvl = do
     st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch = ma@BusNetwork{}}} <- get
-    case findDecision ma v intrvl of
-        Just option -> put st{unit = ts{tMicroArch = dataflowDecision ma $ dataflowOption2decision option}}
-        Nothing -> lift $ assertFailure ("Cannot transfer variable: " <> show v)
+    let res = findDecision ma v intrvl
+    unless (length res == 1) $
+        lift $ assertFailure ("Cannot transfer variable: " <> show v)
+    case length res of
+        1 -> put st{unit = ts{tMicroArch = dataflowDecision ma $ dataflowOption2decision $ head res}}
+        0 -> lift $ assertFailure ("Cannot transfer variable: " <> show v <> "; Haven't found any decisions.")
+        _ -> lift $ assertFailure ("Cannot transfer variable: " <> show v <> "; There are more than one possible decision: " <> show res)
 
 findDecision u v intrvl =
     let isSame dfo = any (isSubroleOf v) $ provider dfo : consumer dfo
@@ -330,7 +334,8 @@ findDecision u v intrvl =
         isValidInterval atA atB =
             atA `isSubsetOf` tcAvailable atB
                 && member (width atA + 1) (tcDuration atB)
-     in find (\dfo -> isSame dfo && isIntrvl intrvl dfo) $ dataflowOptions u
+     in filter (\dfo -> isSame dfo && isIntrvl intrvl dfo) $ dataflowOptions u
+
 
 -- | Make synthesis decision with provided Endpoint Role and automatically assigned time
 decide :: EndpointRole v -> DSLStatement pu v x t ()
