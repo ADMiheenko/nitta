@@ -134,8 +134,10 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     setRecievedValue,
     setRecievedValues,
     assignLua,
+    bindPrepare,
     bindVariables,
     traceBindVariables,
+    traceBindVariablesWithInit,
     traceDataflow,
     traceDataflowOptions,
     traceBus,
@@ -144,6 +146,8 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     assertSynthesisInclude,
     OptimizationType (..),
     toDfg,
+    transferVariables,
+    transferVariablesAt,
 ) where
 
 import Control.Monad.Identity
@@ -292,10 +296,42 @@ setNetwork network = do
     st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
     put st{unit = ts{tMicroArch = network}}
 
-bindVariables = do
+bindPrepare = do
     st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch, tDFG}} <- get
-    root <- lift $ targetUnit <$> synthesisTreeRootIO (mkModelWithOneNetwork tMicroArch tDFG)
+    root <- lift $ getTreeUnit tMicroArch tDFG
     put st{unit = ts{tMicroArch = root}}
+
+bindVariables f = do
+    st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch}, functs} <- get
+    case find (\(Bind f' _) -> f == f') $ bindOptions tMicroArch of
+        Just decision -> put st{unit = ts{tMicroArch = bindDecision tMicroArch decision}, functs = f : functs}
+        Nothing -> lift $ assertFailure ("Cannot bind variable: " <> show f)
+
+-- TODO: don't run it more than once
+getTreeUnit tMicroArch tDfg = targetUnit <$> synthesisTreeRootIO (mkModelWithOneNetwork tMicroArch tDfg)
+
+transferVariables v = transferVariables' v Nothing
+
+transferVariablesAt v from to = transferVariables' v $ Just (from, to)
+
+-- TODO: is it possible to use unsafe parameter?
+transferVariables' v intrvl = do
+    st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch = ma@BusNetwork{}}} <- get
+    case findDecision ma v intrvl of
+        Just option -> put st{unit = ts{tMicroArch = dataflowDecision ma $ dataflowOption2decision option}}
+        Nothing -> lift $ assertFailure ("Cannot transfer variable: " <> show v)
+
+findDecision u v intrvl =
+    let isSame dfo = any (isSubroleOf v) $ provider dfo : consumer dfo
+        provider dfo = epRole $ snd $ dfSource dfo
+        consumer dfo = map (epRole . snd) $ dfTargets dfo
+        isIntrvl Nothing _ = True
+        isIntrvl (Just (a, b)) dfo = isValidInterval (a ... b) $ epAt $ snd $ dfSource dfo
+        isValidInterval atA atB =
+            atA `isSubsetOf` tcAvailable atB
+                && member (width atA + 1) (tcDuration atB)
+     in find (\dfo -> isSame dfo && isIntrvl intrvl dfo) $ dataflowOptions u
+
 -- | Make synthesis decision with provided Endpoint Role and automatically assigned time
 decide :: EndpointRole v -> DSLStatement pu v x t ()
 decide role = do
@@ -518,4 +554,9 @@ traceDataflowOptions = do
 traceBindVariables = do
     UnitTestState{unit = TargetSynthesis{tMicroArch}} <- get
     lift $ putStrLn $ "BindVariables: " <> show (bindOptions tMicroArch)
+    return ()
+traceBindVariablesWithInit = do
+    UnitTestState{unit = TargetSynthesis{tMicroArch, tDFG}} <- get
+    root <- lift $ getTreeUnit tMicroArch tDFG
+    lift $ putStrLn $ "BindVariables(i): " <> show (map (\(Bind f _) -> f) $ bindOptions root)
     return ()
