@@ -134,12 +134,12 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     setRecievedValue,
     setRecievedValues,
     assignLua,
-    bindPrepare,
+    bindInit,
+    bindVariable,
     bindVariables,
     traceBindVariables,
-    traceBindVariablesWithInit,
     traceDataflow,
-    traceDataflowOptions,
+    traceTransferOptions,
     traceAvailableRefactor,
     traceBus,
     assertSynthesisDoneT,
@@ -149,6 +149,10 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     toDfg,
     transferVariables,
     transferVariablesAt,
+    getLoopFunctions,
+    applyBreakLoop,
+    applyBreakLoops,
+    assertLoopBroken,
 ) where
 
 import Control.Monad.Identity
@@ -162,6 +166,7 @@ import qualified Data.Set as S
 import Data.String.ToString
 import qualified Data.Text as T
 import NITTA.Intermediate.DataFlow
+import NITTA.Intermediate.Functions
 import NITTA.Intermediate.Types
 import NITTA.LuaFrontend
 import NITTA.Model.Networks.Bus
@@ -296,16 +301,18 @@ setNetwork network = do
     st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
     put st{unit = ts{tMicroArch = network}}
 
-bindPrepare = do
+bindInit = do
     st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch, tDFG}} <- get
     root <- lift $ getTreeUnit tMicroArch tDFG
     put st{unit = ts{tMicroArch = root}}
 
-bindVariables f = do
+bindVariable f = do
     st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch}, functs} <- get
     case find (\(Bind f' _) -> f == f') $ bindOptions tMicroArch of
         Just decision -> put st{unit = ts{tMicroArch = bindDecision tMicroArch decision}, functs = f : functs}
         Nothing -> lift $ assertFailure ("Cannot bind variable: " <> show f)
+
+bindVariables = mapM_ bindVariable
 
 -- TODO: don't run it more than once
 getTreeUnit tMicroArch tDfg = targetUnit <$> synthesisTreeRootIO (mkModelWithOneNetwork tMicroArch tDfg)
@@ -335,7 +342,6 @@ findDecision u v intrvl =
             atA `isSubsetOf` tcAvailable atB
                 && member (width atA + 1) (tcDuration atB)
      in filter (\dfo -> isSame dfo && isIntrvl intrvl dfo) $ dataflowOptions u
-
 
 -- | Make synthesis decision with provided Endpoint Role and automatically assigned time
 decide :: EndpointRole v -> DSLStatement pu v x t ()
@@ -449,10 +455,7 @@ assertSynthesisDoneT = do
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
     toDfg
-    let taUpd =
-            ta
-                { tName = if isJust tSourceCode then "lua_" <> wd else wd
-                }
+    let taUpd = ta{tName = if isJust tSourceCode then "lua_" <> wd else wd}
     status <- lift $ runSynthesis taUpd
     -- TODO: do we need ability to save result (pUnit) of synthesis
     when (isLeft status) $
@@ -477,10 +480,7 @@ assertSynthesisRunT = do
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
     toDfg
-    let taUpd =
-            ta
-                { tName = if isJust tSourceCode then "lua_" <> wd else wd
-                }
+    let taUpd = ta{tName = if isJust tSourceCode then "lua_" <> wd else wd}
     res <- lift $ synthesizeTargetSystemWithUniqName taUpd
     case res of
         Left l -> lift $ assertFailure $ "target synthesis failed" <> show l
@@ -551,7 +551,8 @@ traceBus = do
     lift $ putStrLn $ "Bus: " <> show (pretty $ process b)
     return ()
 
-traceDataflowOptions = do
+traceTransferOptions = do
+    toDfg --TODO
     UnitTestState{unit = TargetSynthesis{tMicroArch = ma@BusNetwork{}}} <- get
     lift $ putStrLn $ "Dataflow options: " <> show (dataflowOptions ma)
     return ()
@@ -560,11 +561,6 @@ traceBindVariables = do
     UnitTestState{unit = TargetSynthesis{tMicroArch}} <- get
     lift $ putStrLn $ "BindVariables: " <> show (bindOptions tMicroArch)
     return ()
-traceBindVariablesWithInit = do
-    UnitTestState{unit = TargetSynthesis{tMicroArch, tDFG}} <- get
-    root <- lift $ getTreeUnit tMicroArch tDFG
-    lift $ putStrLn $ "BindVariables(i): " <> show (map (\(Bind f _) -> f) $ bindOptions root)
-    return ()
 
 traceAvailableRefactor = do
     UnitTestState{unit = TargetSynthesis{tMicroArch}} <- get
@@ -572,8 +568,46 @@ traceAvailableRefactor = do
     let constantFoldingOpt = constantFoldingOptions tMicroArch
     let optimizeAccumOpt = optimizeAccumOptions tMicroArch
     let resolveDeadlockOpt = resolveDeadlockOptions tMicroArch
-    lift $ putStrLn $ "Available breakLoopOptions: " <> show breakLoopOpt
-    lift $ putStrLn $ "Available constantFoldingOptions : " <> show constantFoldingOpt
-    lift $ putStrLn $ "Available optimizeAccumOptions: " <> show optimizeAccumOpt
-    lift $ putStrLn $ "Available resolveDeadlockOptions: " <> show resolveDeadlockOpt
+    lift $ putStrLn "Available refactor"
+    lift $ putStrLn $ "  breakLoopOptions: " <> show breakLoopOpt
+    lift $ putStrLn $ "  constantFoldingOptions : " <> show constantFoldingOpt
+    lift $ putStrLn $ "  optimizeAccumOptions: " <> show optimizeAccumOpt
+    lift $ putStrLn $ "  resolveDeadlockOptions: " <> show resolveDeadlockOpt
     return ()
+
+
+-- | Get all loop function. Can be used as value to assertLoopBroken after auto synthesis.
+getLoopFunctions = do
+    UnitTestState{unit = TargetSynthesis{tMicroArch, tDFG}} <- get
+    root <- lift $ getTreeUnit tMicroArch tDFG
+    let loopFs = filter isLoop $ map (\(Bind f _) -> f) $ bindOptions root
+    return loopFs
+
+applyBreakLoop f = do
+    st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch}} <- get
+    case find (\l@BreakLoop{} -> recLoop l == f) $ breakLoopOptions tMicroArch of
+        Just refactor -> put st{unit = ts{tMicroArch = breakLoopDecision tMicroArch refactor}}
+        Nothing -> lift $ assertFailure $ "Can't find refactor for such function: " <> show f
+
+applyBreakLoops fs = mapM_ applyBreakLoop fs
+
+-- TODO combine with assertSynthesisInclude??
+assertLoopBroken [] = lift $ assertFailure "Can't check is loop broken for empty list!"
+assertLoopBroken fs = do
+    UnitTestState{unit = TargetSynthesis{tMicroArch = ma@BusNetwork{}}} <- get
+    -- TODO add loop filter to check that there is no other func
+    let fs' = S.fromList $ concatMap (concatBind . loopExtract) fs
+    let cad = S.fromList $ getCADs $ process ma
+    unless (S.isSubsetOf fs' cad) $
+        lift $
+            assertFailure $
+                "Can't find refactor for such functions: "
+                    <> show (S.difference fs' cad)
+                    <> "\n in: "
+                    <> show cad
+    where
+        loopExtract f
+            | Just f_@(Loop _ (O ov) (I iv)) <- castF f = Just (f_, ov, iv)
+            | otherwise = Nothing
+        concatBind (Just (f, ov, iv)) = ["bind LoopBegin " <> label f <> " " <> concatMap label (S.elems ov), "bind LoopEnd " <> label f <> " " <> label iv]
+        concatBind Nothing = []

@@ -162,13 +162,11 @@ tests =
                 sum(0,0,0)
             |]
             traceDataflow
-            traceDataflowOptions
+            traceTransferOptions
             assertSynthesisInclude OptimizeAccumOpt
             assertSynthesisInclude ConstantFoldingOpt
         , unitTestCase "bus network detailed test" tbr $ do
             setNetwork $ maBroken ubr
-            assertSynthesisInclude OptimizeAccumOpt
-            assertSynthesisInclude ConstantFoldingOpt
             setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
             assignLua
                 [__i|
@@ -181,34 +179,30 @@ tests =
                 sum(0,0,0)
             |]
             traceDataflow
-            toDfg
-            traceDataflow
-            traceDataflowOptions
-            traceBindVariablesWithInit
-            bindPrepare
-            bindVariables (F.loop 0 "d#0" ["a#0"])
+            traceTransferOptions
             traceBindVariables
-            bindVariables (F.loop 0 "e#0" ["c#0"])
-            bindVariables (F.constant 1 ["1@const#0"])
-            bindVariables (F.constant 2 ["2@const#0"])
+            bindInit
+            let loopDA = F.loop 0 "d#0" ["a#0"]
+                loopEC = F.loop 0 "e#0" ["c#0"]
+                loopFB = F.loop 0 "f#0" ["b#0"]
+            -- bindVariables [loopDA, loopEC, loopFB]
+            bindVariables [loopDA, loopEC, loopFB]
+            bindVariable (F.constant 1 ["1@const#0"])
+            bindVariable (F.constant 2 ["2@const#0"])
             traceBindVariables
             -- TODO: Does it bind both?
-            bindVariables (F.loop 0 "f#0" ["b#0"])
-            bindVariables (F.add "d#1" "2@const#0" ["f#0"])
+            bindVariable (F.add "d#1" "2@const#0" ["f#0"])
             traceBindVariables
-            traceDataflowOptions
             -- works both variants
             --transferVariables $ provide ["2@const#0"]
+            bindVariable (F.add "d#2" "1@const#0" ["e#0"])
+            bindVariable (F.add "a#0" "b#0" ["tmp_0#0"])
+            bindVariable (F.add "tmp_0#0" "c#0" ["d#0", "d#1", "d#2"])
             transferVariables $ consume "2@const#0"
-            traceDataflowOptions
-            traceBindVariables
-            bindVariables (F.add "d#2" "1@const#0" ["e#0"])
-            bindVariables (F.add "a#0" "b#0" ["tmp_0#0"])
-            traceBindVariables
-            bindVariables (F.add "tmp_0#0" "c#0" ["d#0", "d#1", "d#2"])
-            traceBindVariables
-            traceDataflowOptions
+            traceTransferOptions
             traceAvailableRefactor
+            applyBreakLoops [loopDA, loopEC, loopFB]
+            assertLoopBroken [loopDA, loopEC, loopFB]
         , unitTestCase "transfer variable test" tbr $ do
             setNetwork $ microarch ASync SlaveSPI
             setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
