@@ -142,14 +142,10 @@ tests =
                 sum(0,0,0)
             |]
             assertSynthesisRunT
-            assertSynthesisInclude OptimizeAccumOpt
-            assertSynthesisInclude ConstantFoldingOpt
             traceDataflow
             traceBus
         , unitTestCase "negative optimisation test" tbr $ do
             setNetwork $ maBroken ubr{wrongAttr = True}
-            assertSynthesisInclude OptimizeAccumOpt
-            assertSynthesisInclude ConstantFoldingOpt
             setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
             assignLua
                 [__i|
@@ -163,8 +159,6 @@ tests =
             |]
             traceDataflow
             traceTransferOptions
-            assertSynthesisInclude OptimizeAccumOpt
-            assertSynthesisInclude ConstantFoldingOpt
         , unitTestCase "bus network detailed test" tbr $ do
             setNetwork $ maBroken ubr
             setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
@@ -217,8 +211,6 @@ tests =
                 sum(0,0,0)
             |]
             assertSynthesisRunT
-            assertSynthesisInclude OptimizeAccumOpt
-            assertSynthesisInclude ConstantFoldingOpt
             traceDataflow
             traceBus
         , unitTestCase "fixpoint 22 32" ts $ do

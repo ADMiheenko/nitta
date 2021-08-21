@@ -45,17 +45,17 @@ import Test.Tasty.TH
 test_fibonacci =
     [ unitTestCase "simple" ts $ do
         setNetwork march
-        assignNaive (F.loop 0 "b2" ["a1"]) []
-        assignNaive (F.loop 1 "c" ["b1", "b2"]) []
-        assignNaive (F.add "a1" "b1" ["c"]) []
+        assignFunction $ F.loop (0 :: Int) "b2" ["a1"]
+        assignFunction $ F.loop (1 :: Int) "c" ["b1", "b2"]
+        assignFunction $ F.add "a1" "b1" ["c"]
         assertSynthesisDoneT
     , unitTestCase "io_drop_data" ts $ do
         setNetwork $ marchSPIDropData True pInt
-        assignsNaive algWithSend []
+        assignFunctions algWithSend
         assertSynthesisDoneT
     , unitTestCase "io_no_drop_data" ts $ do
         setNetwork $ marchSPI True pInt
-        assignsNaive algWithSend []
+        assignFunctions algWithSend
         assertSynthesisDoneT
     ]
     where
@@ -69,8 +69,7 @@ test_fibonacci =
 test_add_and_io =
     [ unitTestCase "receive 4 variables" ts $ do
         setNetwork $ marchSPI True pInt
-
-        assignsNaive
+        assignFunctions
             [ F.receive ["a"]
             , F.receive ["b"]
             , F.receive ["e"]
@@ -81,7 +80,6 @@ test_add_and_io =
             , F.send "g"
             , F.send "h"
             ]
-            []
         setRecievedValues
             [ ("a", [10 .. 15])
             , ("b", [20 .. 25])

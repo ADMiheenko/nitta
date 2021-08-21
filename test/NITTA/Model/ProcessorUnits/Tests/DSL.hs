@@ -146,13 +146,14 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     assertSynthesisRunT,
     assertSynthesisInclude,
     OptimizationType (..),
-    toDfg,
     transferVariables,
     transferVariablesAt,
     getLoopFunctions,
     applyBreakLoop,
     applyBreakLoops,
     assertLoopBroken,
+    assignFunction,
+    assignFunctions,
 ) where
 
 import Control.Monad.Identity
@@ -182,28 +183,6 @@ import Numeric.Interval.NonEmpty hiding (elem)
 import Prettyprinter (pretty)
 import Test.Tasty (TestTree)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
-
--- TODO: is it possible to avoid new data?
-data OptimizationType = BreakLoopOpt | OptimizeAccumOpt | ConstantFoldingOpt | ResolveDeadlockOpt
-
--- TODO: without negative tests hard to verify
--- mb you should run snd function but how to catch (on user will??)
-assertSynthesisInclude optimisation = do
-    toDfg
-    UnitTestState{unit = TargetSynthesis{tDFG}} <- get
-    case optimisation of
-        BreakLoopOpt ->
-            unless (null $ breakLoopOptions tDFG) $
-                lift $ assertFailure "There are break loop options left"
-        OptimizeAccumOpt ->
-            unless (null $ optimizeAccumOptions tDFG) $
-                lift $ assertFailure "There are accum optimization left"
-        ConstantFoldingOpt ->
-            unless (null $ constantFoldingOptions tDFG) $
-                lift $ assertFailure "There are constant folding options left"
-        ResolveDeadlockOpt ->
-            unless (null $ resolveDeadlockOptions tDFG) $
-                lift $ assertFailure "There are resolve deadlock options left"
 
 unitTestCase ::
     HasCallStack =>
@@ -286,18 +265,20 @@ setValue var val = do
     where
         isVarAvailable v pu = S.isSubsetOf (S.fromList [v]) $ inpVars $ functions pu
 
--- | run translation to DataFlow graph (override old tDFG)
-toDfg =
-    -- TODO: mb better to allow user run this command?
+assignFunction f = assignFunctions [f]
+
+assignFunctions fs = do
+    st@UnitTestState{functs, unit = ts@TargetSynthesis{}} <- get
+    tDFG' <- return $ fsToDataFlowGraph $ fs <> functs
+    put st{functs = fs <> functs, unit = ts{tDFG = tDFG'}}
+
+-- TODO u can keep this variant, but not recommend
+assignLua src =
     let translateToIntermediate = return . frDataFlow . lua2functions
      in do
-            st@UnitTestState{functs, unit = ts@TargetSynthesis{tSourceCode}} <- get
-            tDFG' <- maybe (return $ fsToDataFlowGraph functs) translateToIntermediate tSourceCode
-            put st{unit = ts{tDFG = tDFG'}}
-
-assignLua src = do
-    st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
-    put st{unit = ts{tSourceCode = Just src}}
+            st@UnitTestState{functs, unit = ts@TargetSynthesis{}} <- get
+            tDFG' <- maybe (return $ fsToDataFlowGraph functs) translateToIntermediate $ Just src
+            put st{unit = ts{tSourceCode = Just src, tDFG = tDFG'}}
 
 setBusType busType = modify' $ \st -> st{busType = Just busType}
 
@@ -464,7 +445,6 @@ assertSynthesisDoneT = do
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
-    toDfg
     let taUpd = ta{tName = if isJust tSourceCode then "lua_" <> wd else wd}
     status <- lift $ runSynthesis taUpd
     -- TODO: do we need ability to save result (pUnit) of synthesis
@@ -489,7 +469,6 @@ assertSynthesisRunT = do
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
-    toDfg
     let taUpd = ta{tName = if isJust tSourceCode then "lua_" <> wd else wd}
     res <- lift $ synthesizeTargetSystemWithUniqName taUpd
     case res of
@@ -562,7 +541,6 @@ traceBus = do
     return ()
 
 traceTransferOptions = do
-    toDfg --TODO
     UnitTestState{unit = TargetSynthesis{tMicroArch = ma@BusNetwork{}}} <- get
     lift $ putStrLn $ "Dataflow options: " <> show (dataflowOptions ma)
     return ()
@@ -585,6 +563,12 @@ traceAvailableRefactor = do
     lift $ putStrLn $ "  resolveDeadlockOptions: " <> show resolveDeadlockOpt
     return ()
 
+-- TODO applyRefactor f Proxy
+
+applyConstantFolding = do
+    undefined
+
+isConstantFolded = undefined
 
 -- | Get all loop function. Can be used as value to assertLoopBroken after auto synthesis.
 getLoopFunctions = do
@@ -621,3 +605,30 @@ assertLoopBroken fs = do
             | otherwise = Nothing
         concatBind (Just (f, ov, iv)) = ["bind LoopBegin " <> label f <> " " <> concatMap label (S.elems ov), "bind LoopEnd " <> label f <> " " <> label iv]
         concatBind Nothing = []
+
+-- TODO: is it possible to avoid new data?
+data OptimizationType = BreakLoopOpt | OptimizeAccumOpt | ConstantFoldingOpt | ResolveDeadlockOpt
+
+-- TODO: without negative tests hard to verify
+-- mb you should run snd function but how to catch (on user will??)
+assertSynthesisInclude optimisation = do
+    UnitTestState{unit = TargetSynthesis{tDFG, tMicroArch = BusNetwork{bnRemains}}} <- get
+    {-}
+    unless (isOptionsLeft tDFG optimization) $
+        lift $ assertFailure "There are break loop options left"
+    -}
+    -- TODO how do we know that there wasn't optimisations before??
+    case optimisation of
+        -- TODO: Check CAD step?
+        BreakLoopOpt ->
+            unless (null $ breakLoopOptions tDFG) $
+                lift $ assertFailure "There are break loop options left"
+        OptimizeAccumOpt ->
+            unless (null $ optimizeAccumOptions tDFG) $
+                lift $ assertFailure "There are accum optimization left"
+        ConstantFoldingOpt ->
+            unless (null $ constantFoldingOptions tDFG) $
+                lift $ assertFailure "There are constant folding options left"
+        ResolveDeadlockOpt ->
+            unless (null $ resolveDeadlockOptions tDFG) $
+                lift $ assertFailure "There are resolve deadlock options left"
