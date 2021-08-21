@@ -234,10 +234,20 @@ data UnitTestState pu v x = UnitTestState
 
 type DSLStatement pu v x t r = (HasCallStack, ProcessorUnit pu v x t, EndpointProblem pu v t) => StateT (UnitTestState pu v x) IO r
 
-evalUnitTestState name st alg = evalStateT alg (UnitTestState name st [] [] Nothing $ Left "Report not ready!")
+evalUnitTestState name st alg =
+    evalStateT
+        alg
+        UnitTestState
+            { testName = name
+            , unit = st
+            , functs = []
+            , cntxCycle = []
+            , busType = Nothing
+            , report = Left "Report not ready!"
+            }
 
 -- | Binds several provided functions to PU
-assigns alg = mapM_ assign alg
+assigns = mapM_ assign
 
 -- | Binds provided function to PU
 assign :: F v x -> DSLStatement pu v x t ()
