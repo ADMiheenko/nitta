@@ -130,56 +130,25 @@ tests =
         , unitTestCase "test_accum_optimization_and_deadlock_resolve" ts2 $ do
             -- TODO: We need to check that synthesis process do all needed refactoring
             setNetwork $ microarch ASync SlaveSPI
-            setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
-            assignLua
-                [__i|
-                function sum(a, b, c)
-                    local d = a + b + c -- should AccumOptimization
-                    local e = d + 1 -- e and d should be buffered
-                    local f = d + 2
-                    sum(d, f, e)
-                end
-                sum(0,0,0)
-            |]
+            setBusType pAttrIntX32
+            assignLua luaTemplate
             assertSynthesisRunT
             traceDataflow
             traceBus
         , unitTestCase "negative optimisation test" tbr $ do
             setNetwork $ maBroken ubr{wrongAttr = True}
-            setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
-            assignLua
-                [__i|
-                function sum(a, b, c)
-                    local d = a + b + c -- should AccumOptimization
-                    local e = d + 1 -- e and d should be buffered
-                    local f = d + 2
-                    sum(d, f, e)
-                end
-                sum(0,0,0)
-            |]
+            setBusType pAttrIntX32
+            assignLua luaTemplate
             traceDataflow
             traceTransferOptions
         , unitTestCase "bus network detailed test" tbr $ do
             setNetwork $ maBroken ubr
-            setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
-            assignLua
-                [__i|
-                function sum(a, b, c)
-                    local d = a + b + c -- should AccumOptimization
-                    local e = d + 1 -- e and d should be buffered
-                    local f = d + 2
-                    sum(d, f, e)
-                end
-                sum(0,0,0)
-            |]
-            traceDataflow
-            traceTransferOptions
-            traceBindVariables
+            setBusType pAttrIntX32
+            assignLua luaTemplate
             bindInit
             let loopDA = F.loop 0 "d#0" ["a#0"]
                 loopEC = F.loop 0 "e#0" ["c#0"]
                 loopFB = F.loop 0 "f#0" ["b#0"]
-            -- bindVariables [loopDA, loopEC, loopFB]
             bindVariables [loopDA, loopEC, loopFB]
             bindVariable (F.constant 1 ["1@const#0"])
             bindVariable (F.constant 2 ["2@const#0"])
@@ -193,23 +162,13 @@ tests =
             bindVariable (F.add "a#0" "b#0" ["tmp_0#0"])
             bindVariable (F.add "tmp_0#0" "c#0" ["d#0", "d#1", "d#2"])
             transferVariables $ consume "2@const#0"
-            traceTransferOptions
             traceAvailableRefactor
             applyBreakLoops [loopDA, loopEC, loopFB]
             assertLoopBroken [loopDA, loopEC, loopFB]
         , unitTestCase "transfer variable test" tbr $ do
             setNetwork $ microarch ASync SlaveSPI
-            setBusType pAttrIntX32 -- TODO: fix bug when we not able to use different BusType for same ts
-            assignLua
-                [__i|
-                function sum(a, b, c)
-                    local d = a + b + c -- should AccumOptimization
-                    local e = d + 1 -- e and d should be buffered
-                    local f = d + 2
-                    sum(d, f, e)
-                end
-                sum(0,0,0)
-            |]
+            setBusType pAttrIntX32
+            assignLua luaTemplate
             assertSynthesisRunT
             traceDataflow
             traceBus
@@ -397,3 +356,13 @@ tests =
         accumDef = def :: Accum T.Text Int Int
         u2 = def :: Accum T.Text (Attr (IntX 8)) Int
         fsGen = algGen [packF <$> (arbitrary :: Gen (Acc _ _))]
+        luaTemplate =
+            [__i|
+                function sum(a, b, c)
+                    local d = a + b + c -- should AccumOptimization
+                    local e = d + 1 -- e and d should be buffered
+                    local f = d + 2
+                    sum(d, f, e)
+                end
+                sum(0,0,0)
+            |]

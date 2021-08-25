@@ -158,7 +158,7 @@ tests =
             ]
         , testGroup
             "BusNetwork positive tests"
-            [ unitTestCase "assertLoopBroken ok when func binded" tbr $ do
+            [ unitTestCase "assertLoopBroken ok when break applied" tbr $ do
                 breakLoopTemplate
                 bindInit
                 let loopEC = loop 0 "e#0" ["c#0"]
@@ -199,11 +199,11 @@ tests =
             setBusType pInt
             assignLua
                 [__i|
-                        function sum(a, b, c)
-                            local d = a + b + c -- should AccumOptimization
-                            local e = d + 1 -- e and d should be buffered
-                            local f = d + 2
-                            sum(d, f, e)
+                        function sum(a, c)
+                            local d = a + c 
+                            local m = 100
+                            local e = m + 1
+                            sum(d, e)
                         end
-                        sum(0,0,0)
+                        sum(0,0)
                     |]

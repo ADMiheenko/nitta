@@ -144,8 +144,6 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     traceBus,
     assertSynthesisDoneT,
     assertSynthesisRunT,
-    assertSynthesisInclude,
-    OptimizationType (..),
     transferVariables,
     transferVariablesAt,
     getLoopFunctions,
@@ -154,6 +152,10 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     assertLoopBroken,
     assignFunction,
     assignFunctions,
+    applyConstantFolding,
+    assertConstantFolded,
+    applyOptimizeAccum,
+    assertOptimizeAccum,
 ) where
 
 import Control.Monad.Identity
@@ -269,7 +271,7 @@ assignFunction f = assignFunctions [f]
 
 assignFunctions fs = do
     st@UnitTestState{functs, unit = ts@TargetSynthesis{}} <- get
-    tDFG' <- return $ fsToDataFlowGraph $ fs <> functs
+    let tDFG' = fsToDataFlowGraph $ fs <> functs
     put st{functs = fs <> functs, unit = ts{tDFG = tDFG'}}
 
 -- TODO u can keep this variant, but not recommend
@@ -551,24 +553,13 @@ traceBindVariables = do
     return ()
 
 traceAvailableRefactor = do
-    UnitTestState{unit = TargetSynthesis{tMicroArch}} <- get
-    let breakLoopOpt = breakLoopOptions tMicroArch
-    let constantFoldingOpt = constantFoldingOptions tMicroArch
-    let optimizeAccumOpt = optimizeAccumOptions tMicroArch
-    let resolveDeadlockOpt = resolveDeadlockOptions tMicroArch
+    UnitTestState{unit = TargetSynthesis{tMicroArch = bus}} <- get
     lift $ putStrLn "Available refactor"
-    lift $ putStrLn $ "  breakLoopOptions: " <> show breakLoopOpt
-    lift $ putStrLn $ "  constantFoldingOptions : " <> show constantFoldingOpt
-    lift $ putStrLn $ "  optimizeAccumOptions: " <> show optimizeAccumOpt
-    lift $ putStrLn $ "  resolveDeadlockOptions: " <> show resolveDeadlockOpt
+    lift $ putStrLn $ "  breakLoopOptions: " <> show (breakLoopOptions bus)
+    lift $ putStrLn $ "  constantFoldingOptions : " <> show (constantFoldingOptions bus)
+    lift $ putStrLn $ "  optimizeAccumOptions: " <> show (optimizeAccumOptions bus)
+    lift $ putStrLn $ "  resolveDeadlockOptions: " <> show (resolveDeadlockOptions bus)
     return ()
-
--- TODO applyRefactor f Proxy
-
-applyConstantFolding = do
-    undefined
-
-isConstantFolded = undefined
 
 -- | Get all loop function. Can be used as value to assertLoopBroken after auto synthesis.
 getLoopFunctions = do
@@ -606,29 +597,16 @@ assertLoopBroken fs = do
         concatBind (Just (f, ov, iv)) = ["bind LoopBegin " <> label f <> " " <> concatMap label (S.elems ov), "bind LoopEnd " <> label f <> " " <> label iv]
         concatBind Nothing = []
 
--- TODO: is it possible to avoid new data?
-data OptimizationType = BreakLoopOpt | OptimizeAccumOpt | ConstantFoldingOpt | ResolveDeadlockOpt
+applyConstantFolding f = do
+    st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch}} <- get
+    case find (\ConstantFolding{cRefOld} -> cRefOld == f) $ constantFoldingOptions tMicroArch of
+        Just refactor -> put st{unit = ts{tMicroArch = constantFoldingDecision tMicroArch refactor}}
+        Nothing -> lift $ assertFailure $ "Can't find refactor for such function: " <> show f
 
--- TODO: without negative tests hard to verify
--- mb you should run snd function but how to catch (on user will??)
-assertSynthesisInclude optimisation = do
-    UnitTestState{unit = TargetSynthesis{tDFG, tMicroArch = BusNetwork{bnRemains}}} <- get
-    {-}
-    unless (isOptionsLeft tDFG optimization) $
-        lift $ assertFailure "There are break loop options left"
-    -}
-    -- TODO how do we know that there wasn't optimisations before??
-    case optimisation of
-        -- TODO: Check CAD step?
-        BreakLoopOpt ->
-            unless (null $ breakLoopOptions tDFG) $
-                lift $ assertFailure "There are break loop options left"
-        OptimizeAccumOpt ->
-            unless (null $ optimizeAccumOptions tDFG) $
-                lift $ assertFailure "There are accum optimization left"
-        ConstantFoldingOpt ->
-            unless (null $ constantFoldingOptions tDFG) $
-                lift $ assertFailure "There are constant folding options left"
-        ResolveDeadlockOpt ->
-            unless (null $ resolveDeadlockOptions tDFG) $
-                lift $ assertFailure "There are resolve deadlock options left"
+assertConstantFolded = undefined
+
+applyOptimizeAccum = do
+    st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch}} <- get
+    put st{unit = ts{tMicroArch = optimizeAccumDecision tMicroArch $ head $ optimizeAccumOptions tMicroArch}}
+
+assertOptimizeAccum = undefined
