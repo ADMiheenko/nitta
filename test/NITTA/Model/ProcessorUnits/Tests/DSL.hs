@@ -162,7 +162,7 @@ import Control.Monad.Identity
 import Control.Monad.State.Lazy
 import Data.CallStack
 import Data.Either
-import Data.List (find)
+import Data.List (find, isSubsequenceOf)
 import Data.Maybe
 import Data.Proxy
 import qualified Data.Set as S
@@ -295,6 +295,7 @@ setNetwork network = do
     st@UnitTestState{unit = ts@TargetSynthesis{}} <- get
     put st{unit = ts{tMicroArch = network}}
 
+-- | Allows manual binding function. Incompatible with auto synthesis.
 bindInit = do
     st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch, tDFG}} <- get
     root <- lift $ getTreeUnit tMicroArch tDFG
@@ -598,16 +599,18 @@ assertLoopBroken fs = do
         concatBind (Just (f, ov, iv)) = ["bind LoopBegin " <> label f <> " " <> concatMap label (S.elems ov), "bind LoopEnd " <> label f <> " " <> label iv]
         concatBind Nothing = []
 
-applyConstantFolding f = do
+applyConstantFolding fs = do
     st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch}} <- get
-    case find (\ConstantFolding{cRefOld} -> cRefOld == f) $ constantFoldingOptions tMicroArch of
+    case find (\ConstantFolding{cRefOld} -> isSubsequenceOf fs cRefOld) $ constantFoldingOptions tMicroArch of
         Just refactor -> put st{unit = ts{tMicroArch = constantFoldingDecision tMicroArch refactor}}
-        Nothing -> lift $ assertFailure $ "Can't find refactor for such function: " <> show f
+        Nothing -> lift $ assertFailure $ "Can't find refactor for such function: " <> show fs
 
 assertConstantFolded = undefined
 
-applyOptimizeAccum = do
+applyOptimizeAccum fs = do
     st@UnitTestState{unit = ts@TargetSynthesis{tMicroArch}} <- get
-    put st{unit = ts{tMicroArch = optimizeAccumDecision tMicroArch $ head $ optimizeAccumOptions tMicroArch}}
+    case find (\OptimizeAccum{refOld} -> isSubsequenceOf fs refOld) $ optimizeAccumOptions tMicroArch of
+        Just refactor -> put st{unit = ts{tMicroArch = optimizeAccumDecision tMicroArch refactor}}
+        Nothing -> lift $ assertFailure $ "Can't find refactor for such function: " <> show fs
 
 assertOptimizeAccum = undefined

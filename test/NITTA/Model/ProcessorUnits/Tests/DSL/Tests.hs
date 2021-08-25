@@ -166,7 +166,18 @@ tests =
                 applyBreakLoop loopEC
                 assertLoopBroken [loopEC]
             , unitTestCase "assertLoopBroken ok when auto synthesis" tbr $ do
-                breakLoopTemplate
+                setNetwork march
+                setBusType pInt
+                assignLua
+                    [__i|
+                        function sum(a, b, c)
+                            local d = a + b + c -- should AccumOptimization
+                            local e = d + 1 -- e and d should be buffered
+                            local f = d + 2
+                            sum(d, f, e)
+                        end
+                        sum(0,0,0)
+                    |]
                 loopFs <- getLoopFunctions
                 assertSynthesisRunAuto
                 assertLoopBroken loopFs
@@ -188,6 +199,15 @@ tests =
                     let loopEC = loop 0 "e#0" ["c#0"]
                     bindVariable loopEC
                     assertLoopBroken [loopEC]
+            , expectFail $
+                unitTestCase "assertLoopBroken when func binded" tbr $ do
+                    -- TODO fix case: for unknown reason loop e -> c is not present in process:
+                    -- ["bind LoopBegin loop(0, e#0) = c#0 c#0","bind LoopEnd loop(0, e#0) = c#0 e#0"]
+                    breakLoopTemplate
+                    loopFs <- getLoopFunctions
+                    assertSynthesisRunT
+                    traceBus
+                    assertLoopBroken loopFs
             ]
         ]
     where
