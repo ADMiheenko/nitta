@@ -168,7 +168,7 @@ tests =
             , unitTestCase "assertLoopBroken ok when auto synthesis" tbr $ do
                 breakLoopTemplate
                 loopFs <- getLoopFunctions
-                assertSynthesisRunT
+                assertSynthesisRunAuto
                 assertLoopBroken loopFs
             ]
         , testGroup

@@ -142,8 +142,8 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     traceTransferOptions,
     traceAvailableRefactor,
     traceBus,
-    assertSynthesisDoneT,
-    assertSynthesisRunT,
+    assertSynthesisDoneAuto,
+    assertSynthesisRunAuto,
     transferVariables,
     transferVariablesAt,
     getLoopFunctions,
@@ -167,6 +167,7 @@ import Data.Maybe
 import Data.Proxy
 import qualified Data.Set as S
 import Data.String.ToString
+import qualified Data.String.Utils as S
 import qualified Data.Text as T
 import NITTA.Intermediate.DataFlow
 import NITTA.Intermediate.Functions
@@ -465,7 +466,7 @@ runSynthesis target = do
             Left $ "icarus simulation error:\n" <> show report
 
 -- | Run only automatic synthesis without Testbench. Saves resulting unit to State.
-assertSynthesisRunT = do
+assertSynthesisRunAuto = do
     -- TODO: DRY
     st@UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
     when (null functs && isNothing tSourceCode) $

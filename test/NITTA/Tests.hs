@@ -48,15 +48,15 @@ test_fibonacci =
         assignFunction $ F.loop (0 :: Int) "b2" ["a1"]
         assignFunction $ F.loop (1 :: Int) "c" ["b1", "b2"]
         assignFunction $ F.add "a1" "b1" ["c"]
-        assertSynthesisDoneT
+        assertSynthesisDoneAuto
     , unitTestCase "io_drop_data" ts $ do
         setNetwork $ marchSPIDropData True pInt
         assignFunctions algWithSend
-        assertSynthesisDoneT
+        assertSynthesisDoneAuto
     , unitTestCase "io_no_drop_data" ts $ do
         setNetwork $ marchSPI True pInt
         assignFunctions algWithSend
-        assertSynthesisDoneT
+        assertSynthesisDoneAuto
     ]
     where
         algWithSend =
@@ -86,7 +86,7 @@ test_add_and_io =
             , ("e", [0 .. 25])
             , ("f", [20 .. 30])
             ]
-        assertSynthesisDoneT
+        assertSynthesisDoneAuto
     ]
 
 ts = def :: TargetSynthesis _ _ _ _

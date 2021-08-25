@@ -132,7 +132,7 @@ tests =
             setNetwork $ microarch ASync SlaveSPI
             setBusType pAttrIntX32
             assignLua luaTemplate
-            assertSynthesisRunT
+            assertSynthesisRunAuto
             traceDataflow
             traceBus
         , unitTestCase "negative optimisation test" tbr $ do
@@ -169,7 +169,7 @@ tests =
             setNetwork $ microarch ASync SlaveSPI
             setBusType pAttrIntX32
             assignLua luaTemplate
-            assertSynthesisRunT
+            assertSynthesisRunAuto
             traceDataflow
             traceBus
         , unitTestCase "fixpoint 22 32" ts $ do
@@ -183,7 +183,7 @@ tests =
                       end
                       f()
                   |]
-            assertSynthesisDoneT
+            assertSynthesisDoneAuto
         , typedLuaTestCase
             (microarch ASync SlaveSPI)
             pFX22_32

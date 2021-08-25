@@ -80,6 +80,6 @@ typedIOLuaTestCase arch proxy name received src = unitTestCase name ts $ do
     setBusType proxy
     setRecievedValues received
     assignLua src
-    assertSynthesisDoneT
+    assertSynthesisDoneAuto
 
 ts = def :: Val x => TargetSynthesis T.Text T.Text x Int
