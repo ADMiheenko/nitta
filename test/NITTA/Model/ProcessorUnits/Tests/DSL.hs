@@ -443,41 +443,35 @@ assertSynthesisDone = do
     unless (isProcessComplete unit functs && null (endpointOptions unit)) $
         lift $ assertFailure $ testName <> " Process is not done: " <> incompleteProcessMsg unit functs
 
--- | Run both automatic synthesis and Testbench without saving any intermediate unit representation.
-assertSynthesisDoneT = do
-    UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
+-- | Run both automatic synthesis and Testbench.
+assertSynthesisDoneAuto = assertSynthesis True
+
+-- | Run only automatic synthesis without Testbench.
+assertSynthesisRunAuto = assertSynthesis False
+
+assertSynthesis isTestbench = do
+    st@UnitTestState{testName, functs, unit = ts@TargetSynthesis{tSourceCode}} <- get
     when (null functs && isNothing tSourceCode) $
         lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
     let wd = toModuleName $ toString testName
-    let taUpd = ta{tName = if isJust tSourceCode then "lua_" <> wd else wd}
-    status <- lift $ runSynthesis taUpd
-    -- TODO: do we need ability to save result (pUnit) of synthesis
-    when (isLeft status) $
-        lift $ assertFailure $ fromLeft "target synthesis failed" status
+    let namedTs = ts{tName = if isJust tSourceCode then "lua_" <> wd else wd}
+    result <- lift $ synthesizeTargetSystemWithUniqName namedTs
+    case result of
+        Left l -> lift $ assertFailure $ "target synthesis failed" <> show l
+        Right r -> put st{unit = namedTs{tMicroArch = pUnit r}}
+    when isTestbench $
+        lift $ getTestbenchReport result
 
-runSynthesis target = do
-    reportE <- runTargetSynthesisWithUniqName target
-    return $ case reportE of
-        Left err -> Left $ "synthesis process fail " <> err
-        Right report@TestbenchReport{tbStatus = True} -> Right report
+getTestbenchReport project = do
+    reportTestbench <- traverse runTestbench project
+    case reportTestbench of
+        Left err -> assertFailure ("synthesis process fail " <> err)
+        Right TestbenchReport{tbStatus = True} -> return ()
         Right report@TestbenchReport{tbCompilerDump}
             | T.length tbCompilerDump > 2 ->
-                Left $ "icarus synthesis error:\n" <> show report
+                assertFailure ("icarus synthesis error:\n" <> show report)
         Right report@TestbenchReport{} ->
-            Left $ "icarus simulation error:\n" <> show report
-
--- | Run only automatic synthesis without Testbench. Saves resulting unit to State.
-assertSynthesisRunAuto = do
-    -- TODO: DRY
-    st@UnitTestState{testName, functs, unit = ta@TargetSynthesis{tSourceCode}} <- get
-    when (null functs && isNothing tSourceCode) $
-        lift $ assertFailure "Can't run target synthesis, you haven't provided any functions or source code"
-    let wd = toModuleName $ toString testName
-    let taUpd = ta{tName = if isJust tSourceCode then "lua_" <> wd else wd}
-    res <- lift $ synthesizeTargetSystemWithUniqName taUpd
-    case res of
-        Left l -> lift $ assertFailure $ "target synthesis failed" <> show l
-        Right r -> put st{unit = ta{tMicroArch = pUnit r}}
+            assertFailure ("icarus simulation error:\n" <> show report)
 
 assertLocks :: (Locks pu v) => [Lock v] -> DSLStatement pu v x t ()
 assertLocks expectLocks = do

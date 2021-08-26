@@ -205,7 +205,7 @@ tests =
                     -- ["bind LoopBegin loop(0, e#0) = c#0 c#0","bind LoopEnd loop(0, e#0) = c#0 e#0"]
                     breakLoopTemplate
                     loopFs <- getLoopFunctions
-                    assertSynthesisRunT
+                    assertSynthesisRunAuto
                     traceBus
                     assertLoopBroken loopFs
             ]
