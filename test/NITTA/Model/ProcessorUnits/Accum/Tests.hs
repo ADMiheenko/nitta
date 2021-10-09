@@ -134,7 +134,7 @@ tests =
             assignLua luaTemplate
             assertSynthesisRunAuto
             traceDataflow
-            traceBus
+            traceProcess
         , unitTestCase "negative optimisation test" tsAttrIntX32 $ do
             setNetwork $ maBroken brokenDef{wrongAttr = True}
             setBusType pAttrIntX32
@@ -171,7 +171,7 @@ tests =
             assignLua luaTemplate
             assertSynthesisRunAuto
             traceDataflow
-            traceBus
+            traceProcess
         , unitTestCase "fixpoint 22 32" tsFX22_32 $ do
             setNetwork $ microarch ASync SlaveSPI
             setBusType pFX22_32

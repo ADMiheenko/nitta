@@ -141,7 +141,6 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     traceDataflow,
     traceTransferOptions,
     traceAvailableRefactor,
-    traceBus,
     assertSynthesisDoneAuto,
     assertSynthesisRunAuto,
     transferVariables,
@@ -526,11 +525,6 @@ traceProcess = do
 traceDataflow = do
     UnitTestState{unit = TargetSynthesis{tDFG}} <- get
     lift $ putStrLn $ "Dataflow: " <> show tDFG
-
-traceBus = do
-    UnitTestState{unit = TargetSynthesis{tMicroArch = b@BusNetwork{}}} <- get
-    lift $ putStrLn $ "Bus: " <> show (pretty $ process b)
-    return ()
 
 traceTransferOptions = do
     UnitTestState{unit = TargetSynthesis{tMicroArch = ma@BusNetwork{}}} <- get

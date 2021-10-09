@@ -51,6 +51,15 @@ isSynthesisComplete :: (ProcessorUnit u v x t) => TargetSystem u tag v x t -> Bo
 isSynthesisComplete TargetSystem{mUnit, mDataFlowGraph} =
     transferred mUnit == variables mDataFlowGraph
 
+instance
+    ( VarValTime v x t
+    , ProcessorUnit u v x t
+    ) =>
+    ProcessorUnit (TargetSystem u tag v x t) v x t
+    where
+    tryBind f ts@TargetSystem{mUnit} = fmap (\u -> ts{mUnit = u}) $ tryBind f mUnit
+    process TargetSystem{mUnit} = process mUnit
+
 instance (BindProblem u tag v x) => BindProblem (TargetSystem u tag v x t) tag v x where
     bindOptions TargetSystem{mUnit} = bindOptions mUnit
 
