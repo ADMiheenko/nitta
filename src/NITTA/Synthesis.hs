@@ -85,6 +85,7 @@ module NITTA.Synthesis (
     module NITTA.Synthesis.Types,
     mkModelWithOneNetwork,
     TargetSynthesis (..),
+    targetSynthesis,
     runTargetSynthesis,
     synthesizeTargetSystem,
 ) where
@@ -137,6 +138,9 @@ data TargetSynthesis tag v x t = TargetSynthesis
     , -- |number of simulation and testbench cycles
       tSimulationCycleN :: Int
     }
+
+targetSynthesis :: (UnitTag tag, VarValTime v x t) => TargetSynthesis tag v x t
+targetSynthesis = def
 
 instance (UnitTag tag, VarValTime v x t) => Default (TargetSynthesis tag v x t) where
     def =

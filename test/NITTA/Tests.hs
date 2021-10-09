@@ -43,17 +43,17 @@ import Test.Tasty.TH
 -- FIXME: avoid NITTA.Model.Tests.Internals usage
 
 test_fibonacci =
-    [ unitTestCase "simple" ts $ do
+    [ unitTestCase "simple" targetSynthesis $ do
         setNetwork march
         assignFunction $ F.loop (0 :: Int) "b2" ["a1"]
         assignFunction $ F.loop (1 :: Int) "c" ["b1", "b2"]
         assignFunction $ F.add "a1" "b1" ["c"]
         assertSynthesisDoneAuto
-    , unitTestCase "io_drop_data" ts $ do
+    , unitTestCase "io_drop_data" targetSynthesis $ do
         setNetwork $ marchSPIDropData True pInt
         assignFunctions algWithSend
         assertSynthesisDoneAuto
-    , unitTestCase "io_no_drop_data" ts $ do
+    , unitTestCase "io_no_drop_data" targetSynthesis $ do
         setNetwork $ marchSPI True pInt
         assignFunctions algWithSend
         assertSynthesisDoneAuto
@@ -67,7 +67,7 @@ test_fibonacci =
             ]
 
 test_add_and_io =
-    [ unitTestCase "receive 4 variables" ts $ do
+    [ unitTestCase "receive 4 variables" targetSynthesis $ do
         setNetwork $ marchSPI True pInt
         assignFunctions
             [ F.receive ["a"]
@@ -89,7 +89,6 @@ test_add_and_io =
         assertSynthesisDoneAuto
     ]
 
-ts = def :: TargetSynthesis _ _ _ _
 f1 = F.add "a" "b" ["c", "d"] :: F T.Text Int
 
 patchP :: (Patch a (T.Text, T.Text)) => (T.Text, T.Text) -> a -> a

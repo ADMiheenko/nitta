@@ -161,7 +161,6 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
 import Control.Monad.Identity
 import Control.Monad.State.Lazy
 import Data.CallStack
-import Data.Either
 import Data.List (find, isSubsequenceOf)
 import Data.Maybe
 import Data.Proxy
@@ -465,7 +464,7 @@ assertSynthesis isTestbench = do
 getTestbenchReport project = do
     reportTestbench <- traverse runTestbench project
     case reportTestbench of
-        Left err -> assertFailure ("synthesis process fail " <> err)
+        Left err -> assertFailure ("synthesis process fail: " <> err)
         Right TestbenchReport{tbStatus = True} -> return ()
         Right report@TestbenchReport{tbCompilerDump}
             | T.length tbCompilerDump > 2 ->
@@ -509,29 +508,24 @@ inpVars fs = unionsMap inputs fs
 tracePU = do
     UnitTestState{unit} <- get
     lift $ putStrLn $ "PU: " <> show unit
-    return ()
 
 traceFunctions = do
     UnitTestState{functs} <- get
     lift $ putStrLn $ "Functions: " <> show functs
-    return ()
 
 traceEndpoints = do
     UnitTestState{unit} <- get
     lift $ do
         putStrLn "Endpoints:"
         mapM_ (\ep -> putStrLn $ "- " <> show ep) $ endpointOptions unit
-    return ()
 
 traceProcess = do
     UnitTestState{unit} <- get
     lift $ putStrLn $ "Process: " <> show (pretty $ process unit)
-    return ()
 
 traceDataflow = do
     UnitTestState{unit = TargetSynthesis{tDFG}} <- get
     lift $ putStrLn $ "Dataflow: " <> show tDFG
-    return ()
 
 traceBus = do
     UnitTestState{unit = TargetSynthesis{tMicroArch = b@BusNetwork{}}} <- get
@@ -541,12 +535,10 @@ traceBus = do
 traceTransferOptions = do
     UnitTestState{unit = TargetSynthesis{tMicroArch = ma@BusNetwork{}}} <- get
     lift $ putStrLn $ "Dataflow options: " <> show (dataflowOptions ma)
-    return ()
 
 traceBindVariables = do
     UnitTestState{unit = TargetSynthesis{tMicroArch}} <- get
     lift $ putStrLn $ "BindVariables: " <> show (bindOptions tMicroArch)
-    return ()
 
 traceAvailableRefactor = do
     UnitTestState{unit = TargetSynthesis{tMicroArch = bus}} <- get
@@ -555,7 +547,6 @@ traceAvailableRefactor = do
     lift $ putStrLn $ "  constantFoldingOptions : " <> show (constantFoldingOptions bus)
     lift $ putStrLn $ "  optimizeAccumOptions: " <> show (optimizeAccumOptions bus)
     lift $ putStrLn $ "  resolveDeadlockOptions: " <> show (resolveDeadlockOptions bus)
-    return ()
 
 -- | Get all loop function. Can be used as value to assertLoopBroken after auto synthesis.
 getLoopFunctions = do

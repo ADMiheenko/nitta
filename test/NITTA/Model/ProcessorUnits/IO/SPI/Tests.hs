@@ -19,7 +19,6 @@ module NITTA.Model.ProcessorUnits.IO.SPI.Tests (
 ) where
 
 import Control.Monad (void)
-import Data.Default
 import Data.String.Interpolate
 import qualified Data.Text as T
 import NITTA.Intermediate.DataFlow
@@ -37,7 +36,7 @@ test_multiple_receives =
     [ testCase "receive two variables" $
         void $
             runTargetSynthesisWithUniqName
-                (def :: TargetSynthesis _ _ _ Int)
+                (targetSynthesis :: TargetSynthesis _ _ _ Int)
                     { tName = "receive_two_variables"
                     , tMicroArch = marchSPI True pInt
                     , tReceivedValues = [("a", [10 .. 15]), ("b", [20 .. 25])]
@@ -52,7 +51,7 @@ test_multiple_receives =
     , testCase "receive variable two times" $
         void $
             runTargetSynthesisWithUniqName
-                (def :: TargetSynthesis _ _ _ Int)
+                (targetSynthesis :: TargetSynthesis _ _ _ Int)
                     { tName = "receive_variable_two_times"
                     , tMicroArch = marchSPI True pInt
                     , tReceivedValues = [("a", [10 .. 15]), ("b", [20 .. 25])]

@@ -19,7 +19,6 @@ module NITTA.Model.ProcessorUnits.Tests.DSL.Tests (
 
 import Data.Default
 import Data.String.Interpolate
-import qualified Data.Text as T
 import NITTA.Model.ProcessorUnits.Tests.Providers
 import NITTA.Model.Tests.Providers
 import NITTA.Synthesis
@@ -158,14 +157,14 @@ tests =
             ]
         , testGroup
             "BusNetwork positive tests"
-            [ unitTestCase "assertLoopBroken ok when break applied" tbr $ do
-                breakLoopTemplate
+            [ unitTestCase "assertLoopBroken ok when break applied" targetSynthesis $ do
+                prepareTargetSystem
                 bindInit
                 let loopEC = loop 0 "e#0" ["c#0"]
                 bindVariable loopEC
                 applyBreakLoop loopEC
                 assertLoopBroken [loopEC]
-            , unitTestCase "assertLoopBroken ok when auto synthesis" tbr $ do
+            , unitTestCase "assertLoopBroken ok when auto synthesis" targetSynthesis $ do
                 setNetwork march
                 setBusType pInt
                 assignLua
@@ -185,36 +184,35 @@ tests =
         , testGroup
             "BusNetwork negative tests"
             [ expectFail $
-                unitTestCase "assertLoopBroken fail when func not binded" tbr $ do
-                    breakLoopTemplate
+                unitTestCase "assertLoopBroken fail when func not binded" targetSynthesis $ do
+                    prepareTargetSystem
                     bindInit
                     let loopEC = loop 0 "e#0" ["c#0"]
                     let loopDA = loop 0 "d#0" ["a#0"]
                     bindVariables [loopEC, loopDA]
                     assertLoopBroken [loopEC, loopDA]
             , expectFail $
-                unitTestCase "assertLoopBroken fail when func binded" tbr $ do
-                    breakLoopTemplate
+                unitTestCase "assertLoopBroken fail when func binded" targetSynthesis $ do
+                    prepareTargetSystem
                     bindInit
                     let loopEC = loop 0 "e#0" ["c#0"]
                     bindVariable loopEC
                     assertLoopBroken [loopEC]
             , expectFail $
-                unitTestCase "assertLoopBroken when func binded" tbr $ do
+                unitTestCase "assertLoopBroken when func binded" targetSynthesis $ do
                     -- TODO fix case: for unknown reason loop e -> c is not present in process:
                     -- ["bind LoopBegin loop(0, e#0) = c#0 c#0","bind LoopEnd loop(0, e#0) = c#0 e#0"]
-                    breakLoopTemplate
+                    prepareTargetSystem
                     loopFs <- getLoopFunctions
                     assertSynthesisRunAuto
-                    traceBus
+                    traceProcess
                     assertLoopBroken loopFs
             ]
         ]
     where
-        tbr = def :: Val x => TargetSynthesis T.Text T.Text x Int
         u = multiplier True :: Multiplier String Int Int
         broken = def :: Broken String Int Int
-        breakLoopTemplate = do
+        prepareTargetSystem = do
             setNetwork march
             setBusType pInt
             assignLua

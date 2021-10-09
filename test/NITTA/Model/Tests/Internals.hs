@@ -9,9 +9,9 @@ Maintainer  : aleksandr.penskoi@gmail.com
 Stability   : experimental
 -}
 module NITTA.Model.Tests.Internals (
+    synthesizeTargetSystemWithUniqName,
     runTargetSynthesisWithUniqName,
     uniqTestPath,
-    synthesizeTargetSystemWithUniqName,
 ) where
 
 import Control.Concurrent.STM.TVar

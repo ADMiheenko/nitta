@@ -8,6 +8,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 {- |
@@ -23,7 +24,6 @@ module NITTA.LuaFrontend.Tests (
 ) where
 
 import Control.Exception (ErrorCall, catch)
-import Data.Default
 import Data.FileEmbed (embedStringFile)
 import Data.String.Interpolate
 import qualified Data.Text as T
@@ -32,7 +32,7 @@ import NITTA.Intermediate.Types
 import NITTA.LuaFrontend
 import NITTA.LuaFrontend.Tests.Providers
 import NITTA.Model.ProcessorUnits.Tests.Providers
-import NITTA.Synthesis (TargetSynthesis)
+import NITTA.Synthesis (TargetSynthesis, targetSynthesis)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.ExpectedFailure
 import Test.Tasty.HUnit
@@ -498,7 +498,7 @@ test_examples =
         $(embedStringFile "examples/spi3.lua")
     ]
 
-ts = def :: Val x => TargetSynthesis T.Text T.Text x Int
+ts = targetSynthesis :: Val x => TargetSynthesis T.Text T.Text x Int
 
 tests :: TestTree
 tests = $(testGroupGenerator)

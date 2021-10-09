@@ -127,7 +127,7 @@ tests =
             [("a", 1), ("b", 2), ("e", 4), ("f", -4), ("j", 8)]
             [ accFromStr "+a +b = c = d; +e -f = g; +j = k"
             ]
-        , unitTestCase "test_accum_optimization_and_deadlock_resolve" ts2 $ do
+        , unitTestCase "test_accum_optimization_and_deadlock_resolve" tsAttrIntX32 $ do
             -- TODO: We need to check that synthesis process do all needed refactoring
             setNetwork $ microarch ASync SlaveSPI
             setBusType pAttrIntX32
@@ -135,14 +135,14 @@ tests =
             assertSynthesisRunAuto
             traceDataflow
             traceBus
-        , unitTestCase "negative optimisation test" tbr $ do
-            setNetwork $ maBroken ubr{wrongAttr = True}
+        , unitTestCase "negative optimisation test" tsAttrIntX32 $ do
+            setNetwork $ maBroken brokenDef{wrongAttr = True}
             setBusType pAttrIntX32
             assignLua luaTemplate
             traceDataflow
             traceTransferOptions
-        , unitTestCase "bus network detailed test" tbr $ do
-            setNetwork $ maBroken ubr
+        , unitTestCase "bus network detailed test" tsAttrIntX32 $ do
+            setNetwork $ maBroken brokenDef
             setBusType pAttrIntX32
             assignLua luaTemplate
             bindInit
@@ -165,14 +165,14 @@ tests =
             traceAvailableRefactor
             applyBreakLoops [loopDA, loopEC, loopFB]
             assertLoopBroken [loopDA, loopEC, loopFB]
-        , unitTestCase "transfer variable test" tbr $ do
+        , unitTestCase "transfer variable test" tsAttrIntX32 $ do
             setNetwork $ microarch ASync SlaveSPI
             setBusType pAttrIntX32
             assignLua luaTemplate
             assertSynthesisRunAuto
             traceDataflow
             traceBus
-        , unitTestCase "fixpoint 22 32" ts $ do
+        , unitTestCase "fixpoint 22 32" tsFX22_32 $ do
             setNetwork $ microarch ASync SlaveSPI
             setBusType pFX22_32
             assignLua
@@ -349,10 +349,9 @@ tests =
             assertCoSimulation
         ]
     where
-        ts = def :: Val x => TargetSynthesis T.Text T.Text x Int
-        ts2 = def :: Val x => TargetSynthesis T.Text T.Text x Int
-        tbr = def :: Val x => TargetSynthesis T.Text T.Text x Int
-        ubr = def :: Broken T.Text (Attr (IntX 32)) Int
+        tsFX22_32 = def :: Val x => TargetSynthesis T.Text T.Text x Int
+        tsAttrIntX32 = def :: Val x => TargetSynthesis T.Text T.Text x Int
+        brokenDef = def :: Broken T.Text (Attr (IntX 32)) Int
         accumDef = def :: Accum T.Text Int Int
         u2 = def :: Accum T.Text (Attr (IntX 8)) Int
         fsGen = algGen [packF <$> (arbitrary :: Gen (Acc _ _))]
