@@ -27,6 +27,7 @@ module NITTA.Utils.ProcessDescription (
     scheduleFunctionBind,
     scheduleFunctionRevoke,
     scheduleFunction,
+    scheduleRefactoring,
     scheduleInstructionUnsafe,
     scheduleInstructionUnsafe_,
     scheduleNestedStep,
@@ -136,6 +137,8 @@ scheduleFunctionRevoke f = do
 
 -- |Add to the process description information about function evaluation.
 scheduleFunction ti f = scheduleStep ti $ FStep f
+
+scheduleRefactoring ti ref = scheduleStep ti $ RefactorStep ref
 
 {- |Add to the process description information about endpoint behaviour, and it's low-level
 implementation (on instruction level). Vertical relations connect endpoint level and instruction

@@ -149,24 +149,28 @@ module NITTA.Model.ProcessorUnits.Tests.DSL (
     applyBreakLoop,
     applyBreakLoops,
     assertLoopBroken,
+    assertRefactor,
     assignFunction,
     assignFunctions,
     applyConstantFolding,
     assertConstantFolded,
     applyOptimizeAccum,
     assertOptimizeAccum,
+    mkBreakLoop,
 ) where
 
 import Control.Monad.Identity
 import Control.Monad.State.Lazy
 import Data.CallStack
 import Data.List (find, isSubsequenceOf)
+import qualified Data.List as L
 import Data.Maybe
 import Data.Proxy
 import qualified Data.Set as S
 import Data.String.ToString
 import qualified Data.String.Utils as S
 import qualified Data.Text as T
+import Data.Typeable
 import NITTA.Intermediate.DataFlow
 import NITTA.Intermediate.Functions
 import NITTA.Intermediate.Types
@@ -556,6 +560,15 @@ applyBreakLoop f = do
         Nothing -> lift $ assertFailure $ "Can't find refactor for such function: " <> show f
 
 applyBreakLoops fs = mapM_ applyBreakLoop fs
+
+mkBreakLoop :: (Var v, Val x) => x -> [v] -> v -> StateT (UnitTestState u v x) IO (BreakLoop v x)
+mkBreakLoop x o i = return $ BreakLoop x (S.fromList o) i
+
+assertRefactor ref = do
+    refactors <- filter isRefactorStep . map (descent . pDesc) . steps . process . unit <$> get
+    case L.find (\(RefactorStep r) -> Just ref == cast r) refactors of
+        Nothing -> lift $ assertFailure $ "Refactor not present: " <> show ref <> " in " <> show refactors
+        Just _ -> return ()
 
 -- TODO combine with assertSynthesisInclude??
 assertLoopBroken [] = lift $ assertFailure "Can't check is loop broken for empty list!"

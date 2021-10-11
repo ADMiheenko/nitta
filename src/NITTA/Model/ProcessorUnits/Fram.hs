@@ -46,7 +46,7 @@ import NITTA.Model.Time
 import NITTA.Project
 import NITTA.Utils
 import NITTA.Utils.ProcessDescription
-import Numeric.Interval.NonEmpty (inf, sup, (...))
+import Numeric.Interval.NonEmpty (inf, singleton, sup, (...))
 import Prettyprinter
 
 data Fram v x t = Fram
@@ -275,6 +275,7 @@ instance (VarValTime v x t) => BreakLoopProblem (Fram v x t) v x where
                 revoke <- scheduleFunctionRevoke $ recLoop bl
                 f1 <- scheduleFunctionBind $ recLoopOut bl
                 f2 <- scheduleFunctionBind $ recLoopIn bl
+                _ <- scheduleRefactoring (singleton $ nextTick fram) bl
                 establishVerticalRelations binds (f1 ++ f2 ++ revoke)
                 return (f1, f2)
             iJob = (defJob $ recLoopOut bl){binds = iPid, startAt = Just 0}

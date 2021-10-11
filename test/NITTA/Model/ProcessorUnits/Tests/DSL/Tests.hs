@@ -163,6 +163,7 @@ tests =
                 let loopEC = loop 0 "e#0" ["c#0"]
                 bindVariable loopEC
                 applyBreakLoop loopEC
+                assertRefactor =<< mkBreakLoop 0 ["c#0"] "e#0"
                 assertLoopBroken [loopEC]
             , unitTestCase "assertLoopBroken ok when auto synthesis" targetSynthesis $ do
                 setNetwork march
