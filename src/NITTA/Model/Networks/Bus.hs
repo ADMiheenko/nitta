@@ -30,6 +30,12 @@ module NITTA.Model.Networks.Bus (
     bindedFunctions,
     controlSignalLiteral,
     busNetwork,
+
+    -- *Builder
+    modifyNetwork,
+    defineNetwork,
+    addCustom,
+    add,
 ) where
 
 import Control.Monad.State
@@ -46,6 +52,7 @@ import Data.Typeable
 import NITTA.Intermediate.Types
 import NITTA.Model.Networks.Types
 import NITTA.Model.Problems
+import NITTA.Model.Problems.BindPU
 import NITTA.Model.ProcessorUnits.Types
 import NITTA.Model.Time
 import NITTA.Project.TestBench
@@ -381,6 +388,10 @@ instance (UnitTag tag, VarValTime v x t) => ResolveDeadlockProblem (BusNetwork t
                 , bnPus = M.adjust (patch changeset) tag bnPus
                 , bnBinded = M.map (patch changeset) bnBinded
                 }
+
+instance BindPUProblem (BusNetwork tag v x t) tag v x t where
+    bindPUOptions BusNetwork{bnRemains} = [] -- TODO: BasicEC bindPUOptions bnRemains
+    bindPUDecision bn BindPU{bpTag, bpPU, bpIoPorts} = modifyNetwork bn $ do addCustom bpTag bpPU bpIoPorts
 
 --------------------------------------------------------------------------
 
@@ -733,3 +744,60 @@ instance (UnitTag tag, VarValTime v x t) => Testable (BusNetwork tag v x t) v x 
 isDrowAllowSignal Sync = bool2verilog False
 isDrowAllowSignal ASync = bool2verilog True
 isDrowAllowSignal OnBoard = "is_drop_allow"
+
+--------------------------------------------------------------------------
+
+data BuilderSt tag v x t = BuilderSt
+    { signalBusWidth :: Int
+    , availSignals :: [SignalTag]
+    , pus :: M.Map tag (PU v x t)
+    }
+
+netIOPorts pus =
+    BusNetworkIO
+        { extInputs = unionsMap puInputPorts pus
+        , extOutputs = unionsMap puOutputPorts pus
+        , extInOuts = unionsMap puInOutPorts pus
+        }
+
+modifyNetwork net@BusNetwork{bnPus, bnSignalBusWidth, bnEnv} builder =
+    let st0 =
+            BuilderSt
+                { signalBusWidth = bnSignalBusWidth
+                , availSignals = map (SignalTag . controlSignalLiteral) [bnSignalBusWidth :: Int ..]
+                , pus = bnPus
+                }
+        BuilderSt{signalBusWidth, pus} = execState builder st0
+     in net
+            { bnPus = pus
+            , bnSignalBusWidth = signalBusWidth
+            , bnEnv = bnEnv{ioPorts = Just $ netIOPorts $ M.elems pus}
+            }
+
+puEnv tag ctrlPorts ioPorts =
+    def
+        { ctrlPorts = Just ctrlPorts
+        , ioPorts = Just ioPorts
+        , valueIn = Just ("data_bus", "attr_bus")
+        , valueOut = Just (toText tag <> "_data_out", toText tag <> "_attr_out")
+        }
+
+addCustom tag pu ioPorts = do
+    st@BuilderSt{signalBusWidth, availSignals, pus} <- get
+    let ctrlPorts = takePortTags availSignals pu
+        pu' = PU pu def $ puEnv tag ctrlPorts ioPorts
+        usedPortsLen = length $ usedPortTags ctrlPorts
+    put
+        st
+            { signalBusWidth = signalBusWidth + usedPortsLen
+            , availSignals = drop usedPortsLen availSignals
+            , pus =
+                if M.member tag pus
+                    then error "every PU must has uniq tag"
+                    else M.insert tag pu' pus
+            }
+
+defineNetwork bnName ioSync builder = modifyNetwork (busNetwork bnName ioSync) builder
+
+-- |Add PU with the default initial state. Type specify by IOPorts.
+add tag ioport = addCustom tag def ioport

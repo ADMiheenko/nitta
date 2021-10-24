@@ -26,6 +26,7 @@ import GHC.Generics
 import NITTA.Intermediate.DataFlow
 import NITTA.Intermediate.Types
 import NITTA.Model.Problems
+import NITTA.Model.Problems.BindPU
 import NITTA.Model.ProcessorUnits
 import NITTA.Utils
 
@@ -102,3 +103,8 @@ instance (Var v, ResolveDeadlockProblem u v x) => ResolveDeadlockProblem (Target
             { mDataFlowGraph = resolveDeadlockDecision mDataFlowGraph d
             , mUnit = resolveDeadlockDecision mUnit d
             }
+
+instance (BindPUProblem u tag v x t) => BindPUProblem (TargetSystem u tag v x t) tag v x t where
+    bindPUOptions TargetSystem{mUnit} = bindPUOptions mUnit
+
+    bindPUDecision f@TargetSystem{mUnit} d = f{mUnit = bindPUDecision mUnit d}
